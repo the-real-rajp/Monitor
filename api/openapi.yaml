@@ -1,0 +1,460 @@
+openapi: 3.0.3
+info:
+  title: Monitor API
+  version: 0.1.0
+  description: |
+    Control-plane API for Monitor. Phase 0 covers identity and access:
+    sessions, users and API keys.
+
+    Browser clients authenticate with the `monitor_session` cookie set by
+    `POST /api/v1/auth/login`. Machines authenticate with
+    `Authorization: Bearer mon_<prefix>_<secret>` using an API key.
+
+    Errors always use the `Error` schema.
+servers:
+  - url: /
+tags:
+  - name: system
+  - name: auth
+  - name: users
+  - name: api-keys
+
+paths:
+  /healthz:
+    get:
+      tags: [system]
+      summary: Liveness probe
+      operationId: healthz
+      security: []
+      responses:
+        "200":
+          description: Process is up
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status]
+                properties:
+                  status: { type: string, enum: [ok] }
+
+  /readyz:
+    get:
+      tags: [system]
+      summary: Readiness probe
+      description: Returns 503 when PostgreSQL or ClickHouse is unreachable.
+      operationId: readyz
+      security: []
+      responses:
+        "200":
+          description: All dependencies healthy
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Readiness" }
+        "503":
+          description: One or more dependencies failing
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Readiness" }
+
+  /api/v1/version:
+    get:
+      tags: [system]
+      summary: Build version and uptime
+      operationId: getVersion
+      security: []
+      responses:
+        "200":
+          description: Version information
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [version, uptime_seconds]
+                properties:
+                  version: { type: string }
+                  uptime_seconds: { type: integer, format: int64 }
+
+  /api/v1/auth/login:
+    post:
+      tags: [auth]
+      summary: Log in with email and password
+      description: Sets the `monitor_session` cookie on success. Rate limited per IP and per email.
+      operationId: login
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email: { type: string, format: email }
+                password: { type: string, format: password }
+      responses:
+        "200":
+          description: Logged in
+          headers:
+            Set-Cookie:
+              schema: { type: string }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Me" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+
+  /api/v1/auth/logout:
+    post:
+      tags: [auth]
+      summary: Log out the current session
+      operationId: logout
+      security: [{ cookie: [] }]
+      responses:
+        "204": { description: Session revoked and cookie cleared }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /api/v1/auth/me:
+    get:
+      tags: [auth]
+      summary: Describe the caller
+      operationId: me
+      security: [{ cookie: [] }, { apiKey: [] }]
+      responses:
+        "200":
+          description: Caller identity
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Me" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /api/v1/auth/password:
+    post:
+      tags: [auth]
+      summary: Change the caller's own password
+      description: Revokes every other session of the user and re-issues the current one.
+      operationId: changePassword
+      security: [{ cookie: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [current_password, new_password]
+              properties:
+                current_password: { type: string, format: password }
+                new_password: { type: string, format: password, minLength: 12 }
+      responses:
+        "204": { description: Password changed }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /api/v1/users:
+    get:
+      tags: [users]
+      summary: List users in the caller's org
+      operationId: listUsers
+      security: [{ cookie: [] }]
+      responses:
+        "200":
+          description: Users
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [users]
+                properties:
+                  users:
+                    type: array
+                    items: { $ref: "#/components/schemas/User" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+    post:
+      tags: [users]
+      summary: Create a user
+      operationId: createUser
+      security: [{ cookie: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, name, role, password]
+              properties:
+                email: { type: string, format: email }
+                name: { type: string, minLength: 1 }
+                role: { $ref: "#/components/schemas/Role" }
+                password: { type: string, format: password, minLength: 12 }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/User" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /api/v1/users/{id}:
+    parameters:
+      - $ref: "#/components/parameters/ID"
+    get:
+      tags: [users]
+      summary: Get a user
+      operationId: getUser
+      security: [{ cookie: [] }]
+      responses:
+        "200":
+          description: User
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/User" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    patch:
+      tags: [users]
+      summary: Update a user
+      description: |
+        Any subset of fields may be sent. Changing the password or disabling
+        the user revokes their sessions. The last active admin cannot be
+        demoted or disabled.
+      operationId: updateUser
+      security: [{ cookie: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string, minLength: 1 }
+                role: { $ref: "#/components/schemas/Role" }
+                disabled: { type: boolean }
+                password: { type: string, format: password, minLength: 12 }
+      responses:
+        "200":
+          description: Updated user
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/User" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+    delete:
+      tags: [users]
+      summary: Delete a user
+      description: Callers cannot delete themselves, and the last active admin cannot be deleted.
+      operationId: deleteUser
+      security: [{ cookie: [] }]
+      responses:
+        "204": { description: Deleted }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /api/v1/api-keys:
+    get:
+      tags: [api-keys]
+      summary: List API keys in the caller's org
+      operationId: listAPIKeys
+      security: [{ cookie: [] }]
+      responses:
+        "200":
+          description: API keys, revoked ones included
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [api_keys]
+                properties:
+                  api_keys:
+                    type: array
+                    items: { $ref: "#/components/schemas/APIKey" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+    post:
+      tags: [api-keys]
+      summary: Create an API key
+      description: The full key is returned once in this response and never again.
+      operationId: createAPIKey
+      security: [{ cookie: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, scopes]
+              properties:
+                name: { type: string, minLength: 1, maxLength: 100 }
+                scopes:
+                  type: array
+                  minItems: 1
+                  items: { $ref: "#/components/schemas/Scope" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/APIKeyCreated" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /api/v1/api-keys/{id}:
+    parameters:
+      - $ref: "#/components/parameters/ID"
+    delete:
+      tags: [api-keys]
+      summary: Revoke an API key
+      operationId: revokeAPIKey
+      security: [{ cookie: [] }]
+      responses:
+        "204": { description: Revoked }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+components:
+  securitySchemes:
+    cookie:
+      type: apiKey
+      in: cookie
+      name: monitor_session
+    apiKey:
+      type: http
+      scheme: bearer
+      description: An API key of the form mon_<prefix>_<secret>.
+
+  parameters:
+    ID:
+      name: id
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+
+  responses:
+    BadRequest:
+      description: Malformed or invalid request
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    Unauthorized:
+      description: Not authenticated
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    Forbidden:
+      description: Authenticated but not allowed
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    NotFound:
+      description: No such resource in the caller's org
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    Conflict:
+      description: The request conflicts with current state
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    RateLimited:
+      description: Too many attempts
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+
+  schemas:
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code:
+              type: string
+              enum: [bad_request, unauthorized, invalid_credentials, forbidden, not_found, conflict, rate_limited, internal]
+            message: { type: string }
+
+    Readiness:
+      type: object
+      required: [status, checks]
+      properties:
+        status: { type: string, enum: [ok, degraded] }
+        checks:
+          type: object
+          additionalProperties: { type: string }
+          description: Dependency name to "ok" or an error message.
+
+    Role:
+      type: string
+      enum: [admin, member, viewer]
+
+    Scope:
+      type: string
+      enum: [ingest, read, write]
+
+    Org:
+      type: object
+      required: [id, name, slug]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        slug: { type: string }
+
+    User:
+      type: object
+      required: [id, org_id, email, name, role, disabled, created_at, updated_at]
+      properties:
+        id: { type: string, format: uuid }
+        org_id: { type: string, format: uuid }
+        email: { type: string, format: email }
+        name: { type: string }
+        role: { $ref: "#/components/schemas/Role" }
+        disabled: { type: boolean }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    Me:
+      type: object
+      required: [org]
+      description: Exactly one of user or api_key is present.
+      properties:
+        user: { $ref: "#/components/schemas/User" }
+        api_key: { $ref: "#/components/schemas/APIKey" }
+        org: { $ref: "#/components/schemas/Org" }
+
+    APIKey:
+      type: object
+      required: [id, name, prefix, scopes, created_by, created_at, last_used_at, revoked_at]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        prefix: { type: string, description: Public identifier shown in the UI. }
+        scopes:
+          type: array
+          items: { $ref: "#/components/schemas/Scope" }
+        created_by: { type: string, format: uuid, nullable: true }
+        created_at: { type: string, format: date-time }
+        last_used_at: { type: string, format: date-time, nullable: true }
+        revoked_at: { type: string, format: date-time, nullable: true }
+
+    APIKeyCreated:
+      allOf:
+        - $ref: "#/components/schemas/APIKey"
+        - type: object
+          required: [key]
+          properties:
+            key:
+              type: string
+              description: The full secret. Shown once.

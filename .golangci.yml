@@ -1,0 +1,35 @@
+version: "2"
+run:
+  timeout: 5m
+linters:
+  default: standard
+  enable:
+    - errcheck
+    - govet
+    - ineffassign
+    - staticcheck
+    - unused
+    - misspell
+    - gosec
+    - bodyclose
+    - noctx
+    - errorlint
+    - unconvert
+    - unparam
+  settings:
+    gosec:
+      excludes:
+        - G104 # handled by errcheck
+  exclusions:
+    paths:
+      - internal/store/pg/sqlc
+    rules:
+      - path: _test\.go
+        linters: [gosec, noctx, bodyclose]
+formatters:
+  enable:
+    - gofmt
+    - goimports
+  exclusions:
+    paths:
+      - internal/store/pg/sqlc

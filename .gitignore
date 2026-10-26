@@ -1,0 +1,21 @@
+# Go
+/bin/
+*.test
+*.out
+coverage.html
+
+# Node
+node_modules/
+web/dist/
+internal/webui/dist/
+
+# Local environment
+.env
+.env.local
+*.local.yaml
+
+# Editors
+.idea/
+.vscode/
+*.swp
+.DS_Store
