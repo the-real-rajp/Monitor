@@ -21,3 +21,9 @@ web/.phpunit.cache/
 .vscode/
 *.swp
 .DS_Store
+
+# Dashboard build output lives in web/public on the deploy branch only.
+web/public/index.html
+web/public/assets/
+web/storage/
+agent.env

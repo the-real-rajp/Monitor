@@ -1,0 +1,29 @@
+# Cross-compiles the proxy for a tag and attaches the binaries to the release,
+# where install.sh downloads them from.
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  agent:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - run: make agent-release VERSION=${{ github.ref_name }}
+      - run: cd bin && sha256sum monitor-agent-linux-* > SHA256SUMS
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            bin/monitor-agent-linux-amd64
+            bin/monitor-agent-linux-arm64
+            bin/monitor-agent-linux-arm
+            bin/SHA256SUMS
+          generate_release_notes: true

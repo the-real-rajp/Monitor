@@ -1,0 +1,56 @@
+# Builds the dashboard and publishes a deployable tree to the `deploy` branch.
+# cPanel's Git Version Control pulls that branch; its .cpanel.yml copies the
+# web/ directory into place. Nothing is built on the shared host.
+name: deploy-branch
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: deploy-branch
+  cancel-in-progress: true
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: ui/package-lock.json
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.3"
+          coverage: none
+      - name: Build dashboard into web/public
+        run: npm ci --no-audit --no-fund && npm run build
+        working-directory: ui
+      - name: Install production PHP dependencies
+        run: composer install --no-dev --no-interaction --no-progress --optimize-autoloader
+        working-directory: web
+      - name: Assemble deploy tree
+        run: |
+          set -e
+          rm -rf /tmp/deploy && mkdir -p /tmp/deploy
+          cp -r web /tmp/deploy/web
+          rm -rf /tmp/deploy/web/tests /tmp/deploy/web/phpunit.xml /tmp/deploy/web/.phpunit.cache /tmp/deploy/web/config.php /tmp/deploy/web/storage
+          cp deploy/cpanel/.cpanel.yml /tmp/deploy/.cpanel.yml
+          cp deploy/cpanel/README.md /tmp/deploy/README.md
+          echo "$GITHUB_SHA" > /tmp/deploy/web/BUILD
+      - name: Push deploy branch
+        run: |
+          set -e
+          cd /tmp/deploy
+          git init -q -b deploy
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -q -m "Deploy build of ${GITHUB_SHA::7}"
+          git push --force "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" deploy:deploy

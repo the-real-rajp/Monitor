@@ -1,0 +1,31 @@
+[Unit]
+Description=Monitor proxy: pings local devices and reports to the Monitor website
+Documentation=https://github.com/the-real-rajp/monitor
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=monitor-agent
+Group=monitor-agent
+EnvironmentFile=/etc/monitor-agent/agent.env
+ExecStart=/usr/local/bin/monitor-agent
+Restart=always
+RestartSec=5
+
+# ICMP: unprivileged datagram sockets work when the group is inside
+# net.ipv4.ping_group_range (install.sh sets it). CAP_NET_RAW is the fallback
+# for kernels or distributions where that is unavailable.
+AmbientCapabilities=CAP_NET_RAW
+CapabilityBoundingSet=CAP_NET_RAW
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ProtectKernelTunables=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+MemoryMax=256M
+
+[Install]
+WantedBy=multi-user.target
