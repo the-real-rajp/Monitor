@@ -365,24 +365,26 @@ Exit: an on-call engineer can go from page to root cause without leaving the pro
 | ClickHouse operational unfamiliarity | Single node in phases 0 to 3, documented backup and upgrade procedures, one person owns learning it, replication deferred to phase 4. |
 | Scope creep in the dashboard builder | v1 panels are four types with the structured query. No plugin system, no scripting. |
 
-## 10. Decisions to confirm before Phase 0
+## 10. Decisions taken before Phase 0
 
-1. **ClickHouse plus Postgres, or TimescaleDB alone.** The plan recommends the
-   former. Choosing TimescaleDB alone simplifies operations and is fine for phases 1
-   and 2, but phase 3 logs and traces will want a columnar store anyway.
-2. **React or Svelte** for the UI. React is the default; this is a team preference
-   call with no architectural consequence.
-3. **ICMP checks** require raw socket capability on probers. Keep them in v1 or drop
-   to phase 4.
-4. **Prometheus scrape compatibility** in the agent. Cheap to add in phase 2 and
-   widens the set of apps that work out of the box. Recommend yes.
-5. **Deployment target** for the team's own instance: a single VM with
-   `docker compose`, or Kubernetes from the start. The plan assumes the VM; the Helm
-   chart arrives in phase 4.
+All five were settled on 2026-10-14 in favour of the plan's recommendation.
 
-## 11. Immediate next steps
+1. **ClickHouse plus PostgreSQL.** Recorded in `docs/adr/001-storage.md`.
+2. **React** for the web UI (Vite, TypeScript, TanStack Query).
+3. **ICMP checks stay in v1.** Probers run with `CAP_NET_RAW`; the compose and
+   systemd files grant it.
+4. **Prometheus scrape compatibility** ships in the phase 2 agent. Recorded in
+   `docs/adr/002-ingest-protocol.md`.
+5. **Single VM with `docker compose`** is the deployment target for the team's own
+   instance. The Helm chart arrives in phase 4.
 
-1. Review this document and settle the five decisions above.
-2. Write ADR-001 (storage) and ADR-002 (ingest protocol) in `docs/adr/`.
-3. Scaffold the repository per section 7 and get `docker compose up` to a login page.
-4. Define the OpenAPI spec for checks, incidents and auth as the first contract.
+## 11. Progress
+
+- **Phase 0: delivered.** Repository scaffold, Go module and npm workspace, CI,
+  `docker compose` stack, forward-only migrations for both databases, sqlc,
+  identity and access (orgs, users, roles, sessions, API keys, CLI user
+  creation), OpenAPI contract with a router-to-spec test, generated TypeScript
+  client, React login and settings pages, and self-metrics flowing into
+  ClickHouse. See `docs/DEVELOPMENT.md` to run it.
+- **Phase 1: next.** Starts with the `checks` table and the prober assignment
+  protocol.
