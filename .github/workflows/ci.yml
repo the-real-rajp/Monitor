@@ -1,0 +1,73 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  web:
+    name: PHP tests
+    runs-on: ubuntu-latest
+    services:
+      mariadb:
+        image: mariadb:10.11
+        env:
+          MARIADB_DATABASE: monitor_test
+          MARIADB_USER: monitor
+          MARIADB_PASSWORD: monitor
+          MARIADB_ROOT_PASSWORD: root
+        ports: ["3306:3306"]
+        options: >-
+          --health-cmd "healthcheck.sh --connect --innodb_initialized"
+          --health-interval 5s --health-timeout 3s --health-retries 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.3"
+          extensions: pdo_mysql, mbstring
+          coverage: none
+      - run: composer install --no-interaction --no-progress
+        working-directory: web
+      - run: composer lint
+        working-directory: web
+      - run: vendor/bin/phpunit
+        working-directory: web
+        env:
+          MONITOR_TEST_DSN: mysql:host=127.0.0.1;port=3306;dbname=monitor_test;charset=utf8mb4
+          MONITOR_TEST_USER: monitor
+          MONITOR_TEST_PASSWORD: monitor
+
+  agent:
+    name: Go proxy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - run: test -z "$(gofmt -l .)"
+      - run: go vet ./...
+      - run: go test -race -count=1 ./...
+      - run: make agent-release
+
+  ui:
+    name: Dashboard
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: ui/package-lock.json
+      - run: npm ci --no-audit --no-fund
+        working-directory: ui
+      - run: npm run lint
+        working-directory: ui
+      - run: npm run build
+        working-directory: ui

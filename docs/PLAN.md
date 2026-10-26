@@ -245,7 +245,17 @@ website; the dashboard shows a month of history once a month has passed.
   settings pages) is removed from the tree. Its auth and API conventions carry
   over in spirit. See `docs/adr/003-shared-hosting.md`.
 
-## 11. Next step
+## 11. Progress
 
-Build Phase 1, starting with the schema, the PHP skeleton and the agent API,
-then the agent, then the dashboard.
+- **Phase 1, 2026-10-24: built and verified locally.** PHP API with sessions,
+  roles, CSRF and login throttling; MySQL schema with raw results, hourly
+  rollups, status engine and outage events; cron job with ICMP detection and
+  TCP fallback; the Go proxy with buffering, backfill and heartbeat; the React
+  dashboard (overview, device page with 30-day strip and RTT chart, devices,
+  proxies, account); install script, systemd unit, cPanel deploy branch
+  workflow, release workflow. 15 PHP integration tests and the Go suite pass;
+  the proxy was run end to end against the PHP site.
+- **Not yet done:** the first install on the Bluehost account (needs the
+  database credentials and cPanel steps in `docs/DEPLOY.md`), and a tagged
+  release so `install.sh` has binaries to download.
+- **Phase 2** (alerts, maintenance windows, exports) has not started.

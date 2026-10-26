@@ -1,0 +1,40 @@
+# Local development stack: MariaDB and the PHP site on http://localhost:8000.
+# The dashboard runs separately with `make dev-ui` (Vite proxies /api here).
+name: monitor-dev
+services:
+  mariadb:
+    image: mariadb:10.11
+    environment:
+      MARIADB_DATABASE: monitor_dev
+      MARIADB_USER: monitor
+      MARIADB_PASSWORD: monitor
+      MARIADB_ROOT_PASSWORD: root
+    ports: ["3306:3306"]
+    volumes: [mariadb-data:/var/lib/mysql]
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 5s
+      retries: 20
+  web:
+    image: php:8.3-cli
+    working_dir: /app/web
+    command: >
+      sh -c "docker-php-ext-install pdo_mysql >/dev/null 2>&1 || true;
+             php bin/migrate.php && php -S 0.0.0.0:8000 -t public public/index.php"
+    environment:
+      MONITOR_CONFIG: /app/deploy/compose/config.php
+    volumes: ["../..:/app"]
+    ports: ["8000:8000"]
+    depends_on:
+      mariadb: { condition: service_healthy }
+  cron:
+    image: php:8.3-cli
+    working_dir: /app/web
+    command: sh -c "docker-php-ext-install pdo_mysql >/dev/null 2>&1 || true; while true; do php bin/cron.php; sleep 60; done"
+    environment:
+      MONITOR_CONFIG: /app/deploy/compose/config.php
+    volumes: ["../..:/app"]
+    depends_on:
+      mariadb: { condition: service_healthy }
+volumes:
+  mariadb-data:

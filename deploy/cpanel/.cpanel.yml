@@ -1,0 +1,13 @@
+---
+# cPanel Git Version Control deployment. This file lives at the root of the
+# `deploy` branch (copied there by .github/workflows/deploy.yml).
+#
+# Edit DEPLOYPATH once for your account: the directory that holds the app.
+# Point the subdomain's document root at $DEPLOYPATH/public.
+deployment:
+  tasks:
+    - export DEPLOYPATH=/home/CPANEL_USER/monitor
+    - /bin/mkdir -p $DEPLOYPATH/storage
+    - /bin/rm -rf $DEPLOYPATH/public/assets
+    - /bin/cp -R web/. $DEPLOYPATH/
+    - /usr/bin/php $DEPLOYPATH/bin/migrate.php
