@@ -1,390 +1,251 @@
 # Monitor: System Plan
 
-Status: draft for review
-Date: 2026-10-14
+Status: v2, replaces the multi-signal plan of 2026-10-14
+Date: 2026-10-24
 
 ## 1. What we are building
 
-A self-hosted monitoring platform for a small team that covers three kinds of signal
-in one product:
+A ping monitor with a polished web dashboard and a month of history per
+device. It answers two questions quickly: is each device reachable right now,
+and how has it behaved over the last 30 days.
 
-| Area | What it answers | Signal sources |
-|---|---|---|
-| Uptime | Is the thing reachable from the outside, and how fast? | HTTP, TCP, DNS, TLS, ICMP probes run on a schedule from one or more locations |
-| Infrastructure | Are the hosts and containers healthy? | A lightweight agent on each host reporting CPU, memory, disk, network, process and container metrics |
-| Applications | What is the code doing? | Metrics, logs and traces emitted by our own services |
+- Devices inside the office network are pinged by a small proxy running on a
+  Linux box or Raspberry Pi on-prem, which pushes results out to the website.
+- Devices reachable from the internet, such as the firewall's public address,
+  are pinged by the website itself on a one-minute cron.
+- Everything is stored in the MySQL database that comes with the Bluehost
+  account and served by a PHP application on the same shared hosting plan.
 
-Everything funnels into a single alerting engine, a single notification layer and a
-single web UI. One place to look, one place to be paged from.
+### Constraints that shape the design
 
-### Scope decisions already made
+| Constraint | Consequence |
+|---|---|
+| Bluehost shared hosting runs PHP and MySQL, kills processes after 10 minutes, offers no root and no services | The website is PHP with a cPanel cron job. No daemon on the host. All long-running work lives in the on-prem proxy. |
+| Shared hosts usually block raw ICMP and may disable `exec` | The website pinger detects at runtime whether `ping` works. When it does not, it falls back to a TCP connect check on a port you choose per device (443 on a firewall, for example), and the UI says which method is in use. |
+| The website cannot reach into the office network | The proxy pulls its device list from the website and pushes results out over HTTPS with an API key. No inbound ports, no VPN. |
+| cPanel cron granularity is one minute | The minimum ping interval for website-side checks is 60 seconds. The proxy can ping as often as every 10 seconds. |
+| One MySQL database, no columnar store | Raw results are kept for 7 days; an hourly rollup table carries the 30-day (and longer) history. Fifty devices every minute is about two million raw rows a month, well within MySQL's comfort zone. |
 
-- Audience: a small team or startup. Dozens to low hundreds of hosts and checks, a
-  handful of users. Not multi-tenant SaaS, but the data model keeps an `org_id` so that
-  door stays open.
-- Build, don't assemble. No Prometheus, Grafana, Alertmanager or Loki. We own the
-  collectors, the schema, the query API, the alert evaluator and the dashboard.
-- Databases are infrastructure, not "existing monitoring tools". We will not write a
-  storage engine. We use PostgreSQL for control-plane data and ClickHouse for telemetry
-  (see section 4 for the reasoning and the alternative).
-- Open wire protocols where they exist. The ingest path speaks OpenTelemetry (OTLP) so
-  applications use standard SDKs instead of one we would have to write and maintain in
-  every language. The format is a standard, not a tool.
+### Out of scope for v1
 
-### Explicitly out of scope for v1
-
-- Multi-tenant billing, per-customer isolation, usage metering.
-- Synthetic browser monitoring (scripted Playwright journeys). Possible later.
-- A text query language of our own (a PromQL or LogQL clone). v1 uses a structured
-  query API. A text language can be layered on later if the UI needs it.
-- Mobile apps. The web UI is responsive and that is enough.
+HTTP, DNS and TLS checks, server metrics, logs, traces, multi-tenancy, on-call
+schedules. The earlier plan's phases 2 to 4 are shelved, not deleted; if the
+product grows, that document is in git history.
 
 ## 2. Architecture
 
 ```
-                     ┌───────────────────────────────────────────────┐
-  Internet           │                  monitor-server               │
-  ┌──────────┐       │  ┌─────────┐  ┌────────┐  ┌───────────────┐  │
-  │ prober   │─OTLP─▶│  │ ingest  │─▶│ writer │─▶│  ClickHouse   │  │
-  │ (region) │       │  │ gRPC/   │  └────────┘  │  telemetry    │  │
-  └──────────┘       │  │ HTTP    │              └───────┬───────┘  │
-                     │  └─────────┘                      │          │
-  Hosts              │                        ┌──────────▼───────┐  │
-  ┌──────────┐       │                        │  query engine    │  │
-  │ agent    │─OTLP─▶│                        └──────────┬───────┘  │
-  └──────────┘       │  ┌──────────────┐                 │          │
-                     │  │ alert        │◀────────────────┘          │
-  Apps               │  │ evaluator    │                            │
-  ┌──────────┐       │  └──────┬───────┘   ┌───────────────┐        │
-  │ OTel SDK │─OTLP─▶│         ▼           │  PostgreSQL   │        │
-  └──────────┘       │  ┌──────────────┐   │  control plane│        │
-                     │  │ notifier     │   └───────────────┘        │
-                     │  └──────┬───────┘                            │
-                     │         │          ┌──────────────┐          │
-                     │         │          │ REST + WS API│◀── web UI│
-                     └─────────┼──────────┴──────────────┴──────────┘
-                               ▼
-                 Slack, email, webhook, PagerDuty-style escalation
+  Office network                                   Bluehost shared hosting
+  ┌───────────────────────────┐                    ┌────────────────────────────────┐
+  │  Raspberry Pi / Linux box │                    │  PHP application (public_html) │
+  │  ┌─────────────────────┐  │  HTTPS, API key    │  ┌──────────┐   ┌───────────┐  │
+  │  │ monitor-agent (Go)  │──┼──GET devices ─────▶│  │ JSON API │──▶│  MySQL    │  │
+  │  │  pings LAN devices  │──┼──POST results ────▶│  │          │   │           │  │
+  │  └─────────────────────┘  │                    │  └──────────┘   └─────┬─────┘  │
+  │   switch, printer, NAS,   │                    │  ┌──────────┐         │        │
+  │   cameras, servers ...    │                    │  │ cron.php │─────────┘        │
+  └───────────────────────────┘                    │  │ 1/minute │ pings external   │
+                                                   │  └──────────┘ targets, rolls   │
+  Internet-facing devices                          │               up, prunes       │
+  ┌───────────────────────────┐   ICMP or TCP      │  ┌──────────────────────────┐  │
+  │ firewall WAN, VPS, ISP GW │◀───────────────────┼──│ React dashboard (static) │  │
+  └───────────────────────────┘                    │  └──────────────────────────┘  │
+                                                   └────────────────────────────────┘
+                                                        ▲ browser, HTTPS
 ```
 
 ### Components
 
-1. **monitor-server** (Go). One binary, several internal services that can be run
-   together for small deployments or split by flag later:
-   - *ingest*: OTLP/gRPC and OTLP/HTTP receivers for metrics, logs and traces. Also
-     the endpoint probers and agents report to. Validates, enriches with org and
-     resource identity, batches, writes.
-   - *writer*: batched inserts into ClickHouse with backpressure. Dead-letter on
-     schema rejects.
-   - *query engine*: translates a structured query (metric, filters, aggregation,
-     group-by, window) into ClickHouse SQL. Applies retention tier selection and
-     result caps.
-   - *scheduler*: decides which prober runs which check and when. Hands out
-     assignments; detects dead probers and reassigns.
-   - *alert evaluator*: runs every rule on its interval, maintains state
-     (inactive, pending, firing, resolved), handles `for` durations, grouping,
-     silences and maintenance windows.
-   - *notifier*: routes firing alerts to channels by label matchers, deduplicates,
-     retries with backoff, records delivery outcomes, drives escalation timers.
-   - *API*: REST for CRUD and queries, WebSocket for live tails and alert feed.
-     Serves the built web UI as static files so one container is a full install.
+1. **Website: PHP application** (`web/`). PHP 8.2, no framework, PDO for
+   MySQL, a small router and a handful of handlers. It does four things:
+   - Serves the JSON API the dashboard uses (devices, status, history, events).
+   - Serves the agent API: device list for an agent, result ingest, heartbeat.
+   - Serves the built React dashboard as static files.
+   - Runs `bin/cron.php` once a minute from cPanel cron: pings website-side
+     devices, updates status, computes hourly rollups, prunes old rows,
+     sends alert emails (phase 2). A lock file prevents overlapping runs, and
+     the whole run is budgeted to finish in under 40 seconds.
 
-2. **monitor-prober** (Go). Stateless worker. Pulls assignments from the server,
-   runs HTTP, TCP, DNS, TLS-expiry and ICMP checks with per-check timeouts, records
-   phase timings (DNS, connect, TLS, first byte, total), ships results as OTLP
-   metrics plus a structured log record per failure. Run one per region; results
-   carry a `region` label so the UI can show "down from 2 of 3 locations".
+2. **On-prem proxy: `monitor-agent`** (`cmd/agent`, Go). One static binary for
+   `linux/arm64`, `linux/arm` (older Pi) and `linux/amd64`, with a systemd unit
+   and an install script. It:
+   - Reads a config file with the website URL and its API key.
+   - Fetches its device list from the website every 60 seconds, so devices are
+     managed in the UI, never on the Pi.
+   - Pings every device on its interval, in parallel, using ICMP. It runs
+     unprivileged via Linux's `ping_group_range` where available and falls back
+     to `CAP_NET_RAW`, which the systemd unit grants.
+   - Batches results and posts them every 10 seconds. When the website is
+     unreachable it buffers in memory, bounded to 24 hours of results, and
+     backfills in order when the connection returns, so a Bluehost hiccup does
+     not create a false outage in the history.
+   - Sends a heartbeat so the UI can show "proxy offline" distinctly from
+     "device down".
 
-3. **monitor-agent** (Go). Runs on every host. Reads `/proc`, `/sys`, cgroups and
-   the Docker socket when present. Reports host and container metrics every 15s by
-   default, tails configured log files and ships them as OTLP logs. Single static
-   binary, systemd unit, under 50 MB resident.
+3. **Dashboard: React** (`ui/`). Vite, TypeScript, TanStack Query, uPlot for
+   the charts. Built output is committed to `web/public/assets` by CI so that
+   cPanel can deploy from git without a Node toolchain on the host.
 
-4. **monitor-web** (TypeScript, React, Vite). The dashboard: overview, check
-   detail, host detail, service detail, log search, trace waterfall, dashboard
-   builder, alert rules, incidents, status page settings, user admin. Also renders
-   the public status page.
+## 3. Data model (MySQL, InnoDB, utf8mb4)
 
-5. **Storage**: PostgreSQL 16 for users, orgs, checks, agents, rules, silences,
-   notification channels, incidents, dashboards and alert state. ClickHouse for
-   check results, metrics, logs and spans.
-
-## 3. Data model
-
-### Control plane (PostgreSQL)
-
-| Table | Purpose |
+| Table | Purpose and key columns |
 |---|---|
-| `orgs`, `users`, `memberships` | Identity. Roles: admin, member, viewer. |
-| `api_keys` | Ingest and automation keys, hashed, scoped to org and signal type. |
-| `checks` | Uptime checks: type, target, interval, timeout, assertions, regions, labels. |
-| `probers`, `agents` | Registered collectors, last heartbeat, version, assigned work. |
-| `alert_rules` | Query, condition, `for` duration, severity, labels, annotations. |
-| `alert_states` | Current state per rule per label set. Rebuilt from ClickHouse on restart if lost. |
-| `silences`, `maintenance_windows` | Matchers plus time range. |
-| `notification_channels`, `routes`, `escalation_policies`, `on_call_schedules` | Who gets told, how, and what happens if they do not ack. |
-| `incidents`, `incident_events` | Grouped firing alerts with a timeline, acks and notes. |
-| `dashboards` | JSON layout of panels, each panel holding a structured query. |
-| `status_pages`, `status_components` | Public page configuration and component-to-check mapping. |
+| `users` | id, email (unique, case-insensitive), name, role (`admin`, `viewer`), password_hash (argon2id via `password_hash`), created_at |
+| `sessions` | token_hash (PK), user_id, expires_at, last_seen_at, user_agent |
+| `agents` | id, name, key_prefix, key_hash, version, last_seen_at, last_ip, created_at, revoked_at |
+| `device_groups` | id, name, sort_order |
+| `devices` | id, name, host, group_id, source (`agent` or `web`), agent_id (when source is agent), interval_s, tcp_fallback_port (web source only), enabled, sort_order, notes, created_at |
+| `ping_results` | device_id, ts, rtt_ms (NULL on timeout), method (`icmp`, `tcp`). PK (device_id, ts). Raw samples, retained 7 days. |
+| `ping_hourly` | device_id, hour (PK with device_id), sent, received, rtt_min, rtt_avg, rtt_max, rtt_p95. Retained 400 days. |
+| `device_status` | device_id (PK), state (`up`, `down`, `unknown`), since, consecutive_failures, last_ts, last_rtt_ms, last_method |
+| `events` | id, device_id, ts, type (`down`, `up`), duration_s (filled on `up`). The outage log and the source of the uptime bar tooltips. |
+| `settings` | `key`, `value`. Down threshold (consecutive failures, default 3), timezone, alert recipients, website pinger method detected. |
+| `schema_migrations` | version, applied_at |
 
-### Telemetry (ClickHouse)
+Sizing at 50 devices, one-minute interval: raw table about 500k rows at
+7 days, hourly table about 480k rows at 400 days. Indexes fit in memory on any
+shared plan.
 
-All telemetry tables are partitioned by day and ordered to make the common query
-(one org, one resource, one name, a time range) a tight range scan.
+Status logic lives in one PHP function used by both ingest paths: a device
+becomes `down` after N consecutive timeouts and `up` on the first success.
+Each transition writes an `events` row. The same function will trigger alerts
+in phase 2.
 
-- `metrics_raw(org_id, metric, labels Map(String,String), ts DateTime64(3), value Float64, resource_id)`
-  Ordered by `(org_id, metric, resource_id, ts)`. TTL per org, default 15 days.
-- `metrics_5m`, `metrics_1h` materialized views with min, max, avg, sum, count and
-  last. TTL 90 days and 2 years. The query engine picks the tier from the requested
-  window and step.
-- `check_results(org_id, check_id, region, ts, ok UInt8, status_code, phase_dns_ms,
-  phase_connect_ms, phase_tls_ms, phase_ttfb_ms, total_ms, error String)`. TTL 90 days
-  raw, rolled up to daily availability forever for SLA reports.
-- `logs(org_id, ts, resource_id, service, severity, body String, attrs Map, trace_id,
-  span_id)` with a tokenized bloom-filter skip index on `body` and an index on
-  `trace_id`. TTL 14 days default.
-- `spans(org_id, trace_id, span_id, parent_span_id, service, name, start_ts,
-  duration_ns, status, attrs Map)`. Ordered by `(org_id, service, start_ts)` with a
-  secondary projection by `trace_id`. TTL 7 days default. Tail sampling of error and
-  slow traces is a phase 3 addition.
+## 4. API
 
-Cardinality control: the ingest path enforces per-org limits on distinct label sets
-per metric and rejects or truncates above the cap, with a visible counter in the UI.
-This is the single most common way monitoring systems fall over and it is cheaper to
-build in on day one.
+Cookie session for the browser, `Authorization: Bearer <key>` for agents.
+All responses JSON. Errors use `{"error": {"code", "message"}}`.
 
-## 4. Technology choices
+| Method and path | Who | Purpose |
+|---|---|---|
+| `POST /api/auth/login`, `POST /api/auth/logout`, `GET /api/auth/me` | browser | Sessions |
+| `GET /api/overview` | browser | Every device with current status, last RTT, 24h uptime and a 60-point sparkline, in one call |
+| `GET /api/devices/{id}/history?range=1h|24h|7d|30d` | browser | Raw points for 1h and 24h, hourly rollups for 7d and 30d |
+| `GET /api/devices/{id}/days?days=30` | browser | Per-day uptime percentage and outage count for the 30-day bar strip |
+| `GET /api/devices/{id}/events` | browser | Outage log with durations |
+| `GET/POST/PATCH/DELETE /api/devices`, `/api/groups` | admin | Device and group management, including reorder |
+| `GET/POST/DELETE /api/agents` | admin | Register an agent (key shown once), revoke, see last heartbeat |
+| `GET /api/agent/devices` | agent | Its enabled devices with intervals; includes an ETag so unchanged lists cost nothing |
+| `POST /api/agent/results` | agent | Batch of `{device_id, ts, rtt_ms}`; idempotent on (device_id, ts) |
+| `POST /api/agent/heartbeat` | agent | Version, uptime, queue depth |
+| `GET /api/health` | public | Database reachable, last cron run time, website pinger method |
 
-| Layer | Choice | Why | Alternative considered |
-|---|---|---|---|
-| Server, prober, agent | Go 1.23 | Single static binaries, cheap goroutines for thousands of concurrent probes, mature OTLP and ClickHouse libraries, trivial cross-compilation for the agent. | Rust (slower to iterate for a small team), Python (agent footprint and probe concurrency are weaker). |
-| Web UI | TypeScript, React 18, Vite, TanStack Query, a charting library built on uPlot for dense time series | Largest hiring pool and ecosystem; uPlot renders 100k points without choking. | SvelteKit (smaller, fine choice if the team prefers it). |
-| Control plane DB | PostgreSQL 16 | Boring, transactional, excellent for configuration and state. | SQLite for single-node (rejected because the prober and server need to share state across hosts). |
-| Telemetry DB | ClickHouse | One columnar store handles metrics, logs and traces at this scale on one node; compression is 10 to 20x; built-in TTL, materialized rollups and skip indexes do the work a custom TSDB would otherwise need. | TimescaleDB only: simpler ops (one database) and fine for metrics and check results, but weak for log search and span storage. If the team strongly prefers one database, take this and accept that logs and traces get a different store later. |
-| Ingest protocol | OTLP (gRPC and HTTP/protobuf) | Standard SDKs in every language; our prober and agent speak it too so there is one ingest path. | Custom protobuf (saves nothing, costs SDKs). Prometheus scrape compatibility is a phase 2 add-on, not a replacement. |
-| Auth | Email and password with argon2id, sessions in Postgres, API keys for machines. OIDC login in phase 4. | Enough for a small team. | |
-| Packaging | Docker images per binary, one `docker compose` file for a full install, Helm chart in phase 4. | | |
-| CI | GitHub Actions: lint, unit tests, integration tests against real Postgres and ClickHouse containers, build images. | | |
+## 5. The dashboard
 
-## 5. Key behaviours in detail
+- **Overview.** Device tiles grouped by `device_groups`. Each tile: name,
+  host, a large status dot, current RTT, 24-hour uptime, and a one-hour
+  sparkline. Down devices float to the top. A banner appears when an agent has
+  not sent a heartbeat for two minutes, because then every device behind it is
+  unknown, not down. Polls every 10 seconds.
+- **Device page.** The 30-day uptime strip (one bar per day, green to red by
+  availability, hover for outages that day). Below it the RTT chart with a
+  range switch (1h, 24h, 7d, 30d), min/avg/max bands on rolled-up ranges,
+  timeouts drawn as markers. Below that the outage table with start, end and
+  duration. Summary numbers for the selected range: uptime, average RTT,
+  longest outage.
+- **Devices and Agents** pages for admins, with the agent page showing the
+  exact install command for a new Pi.
+- Light and dark theme from the OS setting, keyboard-accessible, works on a
+  phone.
 
-### Uptime checks
+## 6. Deployment
 
-- Types: HTTP(S) with method, headers, body, expected status range, body substring or
-  JSON path assertion, max response time; TCP connect; DNS record match; TLS
-  certificate expiry threshold; ICMP ping (needs `CAP_NET_RAW` on the prober).
-- Intervals from 10s to 1h. Each check runs from every region assigned to it.
-- A check is `down` only when a configurable quorum of regions agree (default: more
-  than half), which filters single-location network blips.
-- Each result stores phase timings, so the detail page can show where latency went.
-- Confirmation retry: on first failure, retry once after 5s from the same region
-  before reporting, to cut flapping.
-
-### Metrics query API
-
-A structured query object, not a language:
-
-```json
-{
-  "metric": "system.cpu.utilization",
-  "filters": {"host": "web-*", "state": "user"},
-  "aggregate": "avg",
-  "group_by": ["host"],
-  "window": {"from": "now-6h", "to": "now", "step": "1m"},
-  "functions": [{"rate": "1m"}]
-}
-```
-
-The same object is used by dashboard panels, alert rules and the explore page, so
-there is exactly one translator to ClickHouse SQL to test and optimise.
-
-### Alert evaluation
-
-- Rule kinds: threshold on a metric query, uptime (check down in N regions for M
-  minutes), log pattern count, trace error rate or p99 latency, and heartbeat
-  (expected metric or log stopped arriving).
-- State machine per rule and label set: inactive, pending (condition true, `for`
-  not yet met), firing, resolved. Transitions are written to Postgres and emitted
-  as an event.
-- Grouping: alerts sharing a configurable label set (default: rule and service) are
-  grouped into one incident so a single outage produces one page, not fifty.
-- Silences and maintenance windows suppress notification but not evaluation, so the
-  UI still shows true state.
-- Flap protection: a resolved alert that re-fires within a cooldown re-opens the same
-  incident rather than creating a new one.
-
-### Notification and escalation
-
-- Channels: email (SMTP), Slack (incoming webhook and app), generic webhook with
-  signed payload, Microsoft Teams, Discord, SMS and voice via Twilio (phase 4).
-- Routes match alerts by label to channels, with per-route repeat interval.
-- Escalation policy: step 1 notifies the on-call person, if not acknowledged in N
-  minutes step 2 notifies the next, then a whole channel. Acks come from the UI or by
-  replying to the notification where the channel supports it.
-- Every delivery attempt is recorded so "did anyone get paged" is answerable.
-
-### Public status page
-
-- Per org, optional custom domain, components mapped to checks or rules, 90-day
-  uptime bars, incident posts with updates, subscriber emails. Served by the same
-  binary with aggressive caching since it is the one page that must stay up when
-  everything else is down.
-
-## 6. Capacity targets for v1
-
-Sizing for a single server with 8 vCPU, 32 GB RAM and NVMe, which should cover a
-small team comfortably:
-
-| Dimension | Target |
-|---|---|
-| Hosts with agent | 300 |
-| Metric series | 500,000 active |
-| Metric samples | 40,000 per second sustained |
-| Uptime checks | 1,000 at 30s from 3 regions |
-| Logs | 5,000 lines per second, 14-day retention |
-| Spans | 2,000 per second after sampling, 7-day retention |
-| Query latency | p95 under 1s for a 6-hour dashboard panel, under 5s for a 30-day log search |
-| Alert evaluation | 1,000 rules every 15s with under 2s lag |
-| Ingest to visible | under 10s |
-
-These are design targets, not promises. Phase 2 includes a load-generation tool to
-measure them and the numbers get revised from evidence.
+- **Website.** The repository is connected to cPanel's Git Version Control.
+  `.cpanel.yml` copies `web/` into the document root of a subdomain such as
+  `monitor.example.com`. The cron job is one line in cPanel:
+  `* * * * * php /home/<user>/monitor/bin/cron.php`. Configuration (database
+  credentials, base URL) lives in a `config.php` outside the document root,
+  created once from `config.example.php`.
+- **Dashboard build.** GitHub Actions builds `ui/` on every push to `main` and
+  commits the output to `web/public/assets` on a `deploy` branch, which is the
+  branch cPanel pulls. Developers never commit build output by hand.
+- **Agent.** GitHub Actions cross-compiles the three Linux targets on each tag
+  and attaches them to a release. The install script downloads the right
+  binary, writes `/etc/monitor-agent/config.yaml`, installs the systemd unit
+  and starts it.
+- **Local development.** `docker compose` with MySQL and PHP's built-in
+  server, Vite dev server proxying `/api`. The agent runs with `go run`
+  against localhost.
 
 ## 7. Repository layout
 
-A single Go module and a single npm workspace in one repository:
-
 ```
-cmd/
-  server/           main for monitor-server
-  prober/           main for monitor-prober
-  agent/            main for monitor-agent
-internal/
-  api/              HTTP handlers, OpenAPI spec, auth middleware
-  ingest/           OTLP receivers, validation, cardinality limits
-  store/
-    pg/             sqlc-generated queries, migrations
-    ch/             ClickHouse schema, writers, query translator
-  query/            structured query model and planner
-  alerting/         evaluator, state machine, grouping
-  notify/           channel implementations, routing, escalation
-  scheduler/        check assignment to probers
-  probes/           http, tcp, dns, tls, icmp implementations
-  hostmetrics/      /proc, cgroup and docker collectors used by the agent
-  model/            shared domain types
-web/                React app, built output embedded into the server binary
+cmd/agent/              monitor-agent main
+internal/agent/         config, device list sync, pinger, batcher, uploader
+internal/pinger/        ICMP with unprivileged fallback; shared tests
+web/
+  public/index.php      front controller, serves API and dashboard
+  public/assets/        built dashboard (on the deploy branch only)
+  src/                  PHP: Router, Db, Auth, Handlers/, Pinger, Status, Rollup, Migrations/
+  bin/cron.php          the per-minute job
+  bin/migrate.php, bin/user.php
+  config.example.php
+  composer.json         autoload and PHPUnit only
+  tests/
+ui/                     React dashboard source
 deploy/
-  compose/          docker-compose.yml for a full local or small-prod install
-  systemd/          unit files for the agent
-  helm/             phase 4
+  .cpanel.yml           copied to repo root on the deploy branch
+  agent/                systemd unit, install.sh
+  compose/              local dev stack
 docs/
-  PLAN.md           this document
-  adr/              architecture decision records, one per significant choice
-  api/              generated OpenAPI reference
+  PLAN.md, DEVELOPMENT.md, adr/
 ```
 
-## 8. Delivery phases
+## 8. Delivery
 
-Each phase ends with something a user can run and get value from. Estimates assume
-two to three engineers and are deliberately rough.
+Each step leaves something that works end to end. Estimates assume one to
+two people.
 
-### Phase 0: Foundations (2 weeks)
+### Phase 1: pings and the dashboard (3 to 4 weeks)
 
-- Repository scaffolding, Go module, npm workspace, lint and test in CI.
-- `docker compose up` brings up Postgres, ClickHouse, server and web UI.
-- Migrations framework for both databases; sqlc for Postgres queries.
-- Auth: orgs, users, roles, sessions, API keys. Admin creates the first user via CLI.
-- OpenAPI spec is the contract; the web client is generated from it.
-- Observability of ourselves: the server exports its own metrics into its own
-  ClickHouse so we dogfood from day one.
+1. MySQL schema and migrations, PHP skeleton, auth, config, local compose stack.
+2. Agent API and the Go agent: device sync, ICMP pinger, batching, buffering,
+   heartbeat, systemd unit, install script, cross-compiled builds.
+3. Website pinger in cron with ICMP detection and TCP fallback; status engine;
+   events; hourly rollup and pruning.
+4. Dashboard: overview, device page with the 30-day strip and RTT chart,
+   devices, groups, agents, login.
+5. cPanel deployment: `.cpanel.yml`, deploy branch workflow, documented cron
+   line. First real install on your account.
 
-Exit: a logged-in user sees an empty dashboard; CI is green; an ADR documents the
-storage choice.
+Exit: your Pi is pinging the office and your firewall is pinged from the
+website; the dashboard shows a month of history once a month has passed.
 
-### Phase 1: Uptime monitoring (4 weeks)
+### Phase 2: alerting and polish (1 to 2 weeks)
 
-- Checks CRUD with all five probe types and assertions.
-- Prober binary, assignment protocol, heartbeat, multi-region labels, quorum logic.
-- `check_results` schema, writer, availability and latency queries.
-- Check list, check detail page with phase-timing chart and recent failures.
-- Alert rules of kind "uptime" with `for` duration; incidents; Slack, email and
-  webhook channels; simple routes.
-- Public status page with components and 90-day bars.
+- Email on down and on recovery, with the threshold and a per-device mute.
+  PHP `mail()` on Bluehost, SMTP as an option.
+- Maintenance windows that suppress alerts and grey out the strip.
+- CSV export of a device's history; a printable monthly report.
+- Optional public status page for a chosen subset of devices.
 
-Exit: the team can retire whatever hosted uptime tool it uses today.
+### Phase 3: if wanted later
 
-### Phase 2: Infrastructure (5 weeks)
+- TCP and HTTP checks as first-class check types with the same history.
+- A second agent at another site, with per-site views.
+- Moving the website to a VPS if cron limits or `exec` restrictions bite.
 
-- Agent: host and container collectors, config file, systemd unit, auto-update
-  check, install script.
-- OTLP metrics ingest with cardinality limits; `metrics_raw` plus 5m and 1h rollups.
-- Query engine and structured query API with tier selection.
-- Hosts overview and host detail pages; dashboard builder with time-series, stat,
-  gauge and table panels; saved dashboards.
-- Threshold and heartbeat alert rules on metric queries.
-- Load generator and the first capacity report against section 6.
-- Optional: Prometheus scrape compatibility in the agent for apps that already expose
-  `/metrics`.
-
-Exit: every host runs the agent; disk-full and CPU alerts page the right person.
-
-### Phase 3: Applications (6 weeks)
-
-- OTLP logs and traces ingest; `logs` and `spans` schemas; tail sampling for traces.
-- Log search with full-text, attribute filters, live tail over WebSocket, and
-  log-to-trace linking.
-- Trace list, waterfall view, span detail; service overview with request rate,
-  error rate and latency percentiles derived from spans.
-- Alert rules of kind log-count, error-rate and latency.
-- Service map from span parent relationships.
-- Correlation: from an alert, jump to the host, the logs and the traces for the same
-  window.
-
-Exit: an on-call engineer can go from page to root cause without leaving the product.
-
-### Phase 4: Operational maturity (ongoing)
-
-- On-call schedules with rotations and overrides, escalation policies, acks from
-  Slack, SMS and voice.
-- Maintenance windows, silences with expiry, alert fatigue reports.
-- OIDC login, audit log, per-org retention and limits settings.
-- Horizontal split: run ingest, query and evaluator as separate deployments; Helm
-  chart; ClickHouse replication; Postgres HA guidance.
-- Backups and restore runbook; upgrade path tested in CI.
-
-## 9. Risks and how we handle them
+## 9. Risks
 
 | Risk | Mitigation |
 |---|---|
-| Three signal types is a lot for a small team to build at once | Phases are sequential and each is shippable alone. Phase 1 alone is a useful product. Resist starting phase 3 before phase 2 is in production use. |
-| Writing our own storage would sink the project | We do not. ClickHouse and Postgres carry the storage load; our code is schema, writers and a query translator, all testable. |
-| Label cardinality explosion | Hard per-org limits at ingest, visible counters, documented defaults. |
-| Prober or ingest becomes a single point of failure | Probers are stateless and horizontal from phase 1. Ingest is behind a load balancer from phase 4. Status page is cached and independent of ClickHouse health. |
-| Alert fatigue makes people ignore pages | Grouping, `for` durations, quorum for uptime, flap cooldown and a fatigue report are all in the plan, not afterthoughts. |
-| Clock skew across agents | Server stamps receive time and rejects samples more than 10 minutes in the future; UI shows agent clock drift. |
-| ClickHouse operational unfamiliarity | Single node in phases 0 to 3, documented backup and upgrade procedures, one person owns learning it, replication deferred to phase 4. |
-| Scope creep in the dashboard builder | v1 panels are four types with the structured query. No plugin system, no scripting. |
+| Bluehost disallows `exec` or ICMP, so website pings cannot use `ping` | Built-in TCP fallback, chosen per device; the UI shows the method. Detected on first cron run and shown on the health page. |
+| Cron overruns the minute | Website pings run in parallel with a hard 5-second timeout each; the job records its own duration and refuses to start if the previous run holds the lock. |
+| Website outage or Bluehost maintenance looks like an office outage | The agent buffers 24 hours and backfills with original timestamps. The status engine processes backfilled results in order. |
+| The Pi dies or loses power | Heartbeat-based "proxy offline" state on the overview, distinct from device down. Phase 2 emails about it. |
+| MySQL on shared hosting is slow for aggregate queries | The dashboard reads from `device_status`, `ping_hourly` and `events`; the raw table is only touched for 1h and 24h charts of a single device. |
+| Secrets in git | `config.php` is outside the document root and git-ignored; agent keys are hashed. |
 
-## 10. Decisions taken before Phase 0
+## 10. Decisions taken
 
-All five were settled on 2026-10-14 in favour of the plan's recommendation.
+- Shared cPanel hosting, so the website is PHP with cron, not a service.
+- The cPanel MySQL database is the only data store.
+- The proxy is a Go binary for Linux and Raspberry Pi.
+- The multi-signal Phase 0 code (Go server, PostgreSQL, ClickHouse, React
+  settings pages) is removed from the tree. Its auth and API conventions carry
+  over in spirit. See `docs/adr/003-shared-hosting.md`.
 
-1. **ClickHouse plus PostgreSQL.** Recorded in `docs/adr/001-storage.md`.
-2. **React** for the web UI (Vite, TypeScript, TanStack Query).
-3. **ICMP checks stay in v1.** Probers run with `CAP_NET_RAW`; the compose and
-   systemd files grant it.
-4. **Prometheus scrape compatibility** ships in the phase 2 agent. Recorded in
-   `docs/adr/002-ingest-protocol.md`.
-5. **Single VM with `docker compose`** is the deployment target for the team's own
-   instance. The Helm chart arrives in phase 4.
+## 11. Next step
 
-## 11. Progress
-
-- **Phase 0: delivered.** Repository scaffold, Go module and npm workspace, CI,
-  `docker compose` stack, forward-only migrations for both databases, sqlc,
-  identity and access (orgs, users, roles, sessions, API keys, CLI user
-  creation), OpenAPI contract with a router-to-spec test, generated TypeScript
-  client, React login and settings pages, and self-metrics flowing into
-  ClickHouse. See `docs/DEVELOPMENT.md` to run it.
-- **Phase 1: next.** Starts with the `checks` table and the prober assignment
-  protocol.
+Build Phase 1, starting with the schema, the PHP skeleton and the agent API,
+then the agent, then the dashboard.

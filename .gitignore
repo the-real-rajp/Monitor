@@ -2,17 +2,19 @@
 /bin/
 *.test
 *.out
-coverage.html
 
 # Node
 node_modules/
-web/dist/
-internal/webui/dist/
+ui/dist/
+
+# PHP
+web/vendor/
+web/config.php
+web/.phpunit.cache/
 
 # Local environment
 .env
 .env.local
-*.local.yaml
 
 # Editors
 .idea/
