@@ -1,6 +1,6 @@
 # ADR-002: OpenTelemetry Protocol (OTLP) as the only ingest protocol
 
-Status: accepted, 2026-10-14
+Status: superseded on 2026-10-24 by ADR-003, which moves the product to shared hosting and MySQL
 
 ## Context
 

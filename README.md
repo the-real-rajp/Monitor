@@ -1,27 +1,14 @@
 # Monitor
 
-Self-hosted monitoring for a small team: uptime checks, host and container
-metrics, and application metrics, logs and traces, with one alerting engine and
-one UI.
+Ping monitoring with a month of history. A Raspberry Pi or Linux box in the
+office pings local devices and reports to a PHP website on Bluehost shared
+hosting; the website pings internet-facing devices itself and serves the
+dashboard from its MySQL database.
 
-- `docs/PLAN.md`: architecture, data model, phases and progress.
-- `docs/DEVELOPMENT.md`: how to run, test and extend the code.
+- `docs/PLAN.md`: what we are building, architecture, data model, phases.
 - `docs/adr/`: decisions with lasting consequences.
-- `deploy/compose/`: a complete single-host install with Docker Compose.
 
 ## Status
 
-Phase 0 (foundations) is complete: the server runs, migrates both databases,
-authenticates users and API keys, serves the web UI and monitors itself.
-Phase 1 (uptime monitoring) is next.
-
-## Quick start
-
-```sh
-cd deploy/compose
-cp .env.example .env            # set the passwords
-docker compose up -d --build
-docker compose exec -T server /monitor-server user create \
-    --email you@example.com --name "You" --org "Your Org" --password-stdin <<< 'a-long-password'
-open http://localhost:8080
-```
+Planning for Phase 1 is complete. The multi-signal Phase 0 code that preceded
+this design was removed on 2026-10-24; see `docs/adr/003-shared-hosting.md`.
