@@ -26,16 +26,37 @@ $app = App::fromConfigFile(getenv('MONITOR_CONFIG') ?: __DIR__ . '/../config.php
 $users = new Users($app->db);
 
 $readPassword = function () use ($opts): string {
-    if (($opts['password-stdin'] ?? false) || !stream_isatty(STDIN)) {
+    if ($opts['password-stdin'] ?? false) {
         return rtrim((string) fgets(STDIN), "\r\n");
     }
-    fwrite(STDERR, "Password: ");
-    system('stty -echo');
-    $a = rtrim((string) fgets(STDIN), "\r\n");
-    fwrite(STDERR, "\nConfirm: ");
-    $b = rtrim((string) fgets(STDIN), "\r\n");
-    system('stty echo');
-    fwrite(STDERR, "\n");
+    // Prompt on the controlling terminal. Some shared hosts (cPanel jailshell)
+    // report STDIN as not a tty, so do not rely on stream_isatty(); open
+    // /dev/tty directly and fall back to STDIN only when that is unavailable.
+    $tty = @fopen('/dev/tty', 'r+');
+    $in = $tty ?: STDIN;
+    $out = $tty ?: STDERR;
+    $prompt = function (string $label) use ($in, $out): string {
+        fwrite($out, $label);
+        $hadEcho = @shell_exec('stty -g 2>/dev/null');
+        if ($hadEcho) {
+            @shell_exec('stty -echo 2>/dev/null');
+        }
+        $line = fgets($in);
+        if ($hadEcho) {
+            @shell_exec('stty ' . trim((string) $hadEcho) . ' 2>/dev/null');
+        }
+        fwrite($out, "\n");
+        if ($line === false) {
+            fwrite(STDERR, "no password given (use --password-stdin to pipe one in)\n");
+            exit(1);
+        }
+        return rtrim($line, "\r\n");
+    };
+    $a = $prompt('Password: ');
+    $b = $prompt('Confirm: ');
+    if ($tty) {
+        fclose($tty);
+    }
     if ($a !== $b) {
         fwrite(STDERR, "passwords do not match\n");
         exit(1);
