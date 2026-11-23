@@ -22,6 +22,8 @@ return array(
     'Monitor\\Handlers\\GroupHandlers' => $baseDir . '/src/Handlers/GroupHandlers.php',
     'Monitor\\Handlers\\HealthHandlers' => $baseDir . '/src/Handlers/HealthHandlers.php',
     'Monitor\\Handlers\\OverviewHandlers' => $baseDir . '/src/Handlers/OverviewHandlers.php',
+    'Monitor\\Handlers\\SettingsHandlers' => $baseDir . '/src/Handlers/SettingsHandlers.php',
+    'Monitor\\Handlers\\UserHandlers' => $baseDir . '/src/Handlers/UserHandlers.php',
     'Monitor\\Http\\HttpError' => $baseDir . '/src/Http/HttpError.php',
     'Monitor\\Http\\Request' => $baseDir . '/src/Http/Request.php',
     'Monitor\\Http\\Response' => $baseDir . '/src/Http/Response.php',

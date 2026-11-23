@@ -37,6 +37,8 @@ class ComposerStaticInit563a7e00f47c5bf517273e230780d665
         'Monitor\\Handlers\\GroupHandlers' => __DIR__ . '/../..' . '/src/Handlers/GroupHandlers.php',
         'Monitor\\Handlers\\HealthHandlers' => __DIR__ . '/../..' . '/src/Handlers/HealthHandlers.php',
         'Monitor\\Handlers\\OverviewHandlers' => __DIR__ . '/../..' . '/src/Handlers/OverviewHandlers.php',
+        'Monitor\\Handlers\\SettingsHandlers' => __DIR__ . '/../..' . '/src/Handlers/SettingsHandlers.php',
+        'Monitor\\Handlers\\UserHandlers' => __DIR__ . '/../..' . '/src/Handlers/UserHandlers.php',
         'Monitor\\Http\\HttpError' => __DIR__ . '/../..' . '/src/Http/HttpError.php',
         'Monitor\\Http\\Request' => __DIR__ . '/../..' . '/src/Http/Request.php',
         'Monitor\\Http\\Response' => __DIR__ . '/../..' . '/src/Http/Response.php',
