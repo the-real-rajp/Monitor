@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useSearchParams } from "react-router-dom";
 import { api, errorMessage, INTERVALS, type Agent, type Device, type Group } from "../api/client";
 import { fmtDuration } from "../lib/format";
+import { useRefresh } from "../lib/refresh";
 
 interface Form {
   name: string;
@@ -31,9 +32,11 @@ const blank = (agents: Agent[]): Form => ({
 export default function Devices() {
   const qc = useQueryClient();
   const [params, setParams] = useSearchParams();
+  const { ms } = useRefresh();
   const devices = useQuery({
     queryKey: ["devices"],
     queryFn: () => api.get<{ devices: Device[] }>("/api/devices"),
+    refetchInterval: ms,
   });
   const groups = useQuery({
     queryKey: ["groups"],

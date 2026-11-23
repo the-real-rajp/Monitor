@@ -35,6 +35,16 @@ final class Settings
         }
     }
 
+    /** Dashboard auto-refresh choices in seconds; 0 turns it off. */
+    public const REFRESH_CHOICES = [0, 10, 30, 60, 300];
+
+    /** The auto-refresh interval browsers use until a person picks their own. */
+    public function refreshDefaultSeconds(): int
+    {
+        $s = (int) $this->get('refresh_default_s', '10');
+        return in_array($s, self::REFRESH_CHOICES, true) ? $s : 10;
+    }
+
     public function downThreshold(): int
     {
         return max(1, (int) $this->get('down_threshold', '3'));

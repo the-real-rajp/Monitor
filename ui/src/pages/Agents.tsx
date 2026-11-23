@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { api, errorMessage, type Agent } from "../api/client";
 import { fmtAgo, fmtDateTime } from "../lib/format";
+import { useRefresh } from "../lib/refresh";
 
 const VM_SCRIPTS = {
   ahv: "New-MonitorProxyVM-AHV.ps1",
@@ -87,10 +88,11 @@ function VmSetup({ name, userData }: { name: string; userData: string }) {
 
 export default function Agents() {
   const qc = useQueryClient();
+  const { ms } = useRefresh();
   const q = useQuery({
     queryKey: ["agents"],
     queryFn: () => api.get<{ agents: Agent[] }>("/api/agents"),
-    refetchInterval: 15_000,
+    refetchInterval: ms,
   });
   const [created, setCreated] = useState<Agent | null>(null);
   const [adding, setAdding] = useState(false);

@@ -6,6 +6,7 @@ import RttChart from "../components/RttChart";
 import UptimeStrip from "../components/UptimeStrip";
 import { fmtDateTime, fmtDuration, fmtFor, fmtPct, fmtRtt } from "../lib/format";
 import { useAuth } from "../lib/auth";
+import { useRefresh } from "../lib/refresh";
 
 const RANGES: { key: Range; label: string; title: string }[] = [
   { key: "1h", label: "1h", title: "Last hour" },
@@ -17,27 +18,28 @@ const RANGES: { key: Range; label: string; title: string }[] = [
 export default function DevicePage() {
   const { id } = useParams();
   const { me } = useAuth();
+  const { ms, slowMs } = useRefresh();
   const [range, setRange] = useState<Range>("24h");
 
   const device = useQuery({
     queryKey: ["device", id],
     queryFn: () => api.get<Device>(`/api/devices/${id}`),
-    refetchInterval: 15_000,
+    refetchInterval: ms,
   });
   const history = useQuery({
     queryKey: ["history", id, range],
     queryFn: () => api.get<History>(`/api/devices/${id}/history?range=${range}`),
-    refetchInterval: range === "1h" ? 15_000 : 60_000,
+    refetchInterval: range === "1h" ? ms : slowMs,
   });
   const days = useQuery({
     queryKey: ["days", id],
     queryFn: () => api.get<{ timezone: string; days: Day[] }>(`/api/devices/${id}/days?days=30`),
-    refetchInterval: 60_000,
+    refetchInterval: slowMs,
   });
   const events = useQuery({
     queryKey: ["events", id],
     queryFn: () => api.get<{ events: Outage[] }>(`/api/devices/${id}/events?days=30`),
-    refetchInterval: 60_000,
+    refetchInterval: slowMs,
   });
 
   if (device.isLoading) return <div className="page-loading">Loading…</div>;
