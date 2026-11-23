@@ -73,20 +73,23 @@ all of them and `-Yes` it runs unattended:
 ./New-MonitorProxyVM-AHV.ps1 -PrismCentral pc.example.com -UserDataPath ./office-user-data.yaml -Cluster PROD-01 -StorageContainer default -Subnet VLAN20 -IPAddress dhcp -Cpu 1 -MemoryGB 1 -DiskGB 10 -ImageSource upload -Yes
 ```
 
-**VMware, through vCenter** (needs PowerCLI: `Install-Module VMware.PowerCLI -Scope CurrentUser`, or pass `-InstallPowerCLI`):
+**VMware, through vCenter.** The same, with numbered choices read from
+vCenter (cluster or host, datastore, network, automatic or static IP, folder,
+name and size):
 
 ```powershell
-./New-MonitorProxyVM-VMware.ps1 -VCenter vcenter.example.com -UserDataPath ./office-user-data.yaml -Cluster Prod -Datastore vsanDatastore -Network 'VM Network' -SkipCertificateCheck
+./New-MonitorProxyVM-VMware.ps1
 ```
 
-Use `-VMHost` instead of `-Cluster` to pick a host, and `-Folder` for a VM
-folder.
+It needs VMware PowerCLI and offers to install it for your user account when
+it is missing. A static address is written into the VM. Parameters work the
+same way as for the AHV script:
 
-The VMware script takes its answers as parameters, prompts for the login,
-defaults to 1 vCPU, 1 GB and a 10 GB disk (`-Cpu`, `-MemoryGB`, `-DiskGB`),
-names the VM after the hostname in the first-boot file (`-VMName` overrides)
-and supports `-WhatIf`. `Get-Help ./New-MonitorProxyVM-VMware.ps1 -Full` lists
-every option.
+```powershell
+./New-MonitorProxyVM-VMware.ps1 -VCenter vcenter.example.com -UserDataPath ./office-user-data.yaml -Cluster Prod -Datastore vsanDatastore -Network 'VM Network' -IPAddress dhcp -Folder none -Cpu 1 -MemoryGB 1 -DiskGB 10 -Yes
+```
+
+`Get-Help ./New-MonitorProxyVM-VMware.ps1 -Full` lists every option.
 
 Then skip to **Check it**. The manual steps below do the same by hand.
 

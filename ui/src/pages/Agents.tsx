@@ -77,8 +77,8 @@ function VmSetup({ name, userData }: { name: string; userData: string }) {
           {`# Nutanix AHV, through Prism Central. It asks for everything with numbered choices.
 ./${VM_SCRIPTS.ahv}
 
-# VMware, through vCenter
-./${VM_SCRIPTS.vmware} -VCenter VCENTER-ADDRESS -UserDataPath ./${fileName} -Cluster CLUSTER -Datastore DATASTORE -Network "PORT-GROUP" -InstallPowerCLI -SkipCertificateCheck`}
+# VMware, through vCenter. It asks for everything with numbered choices.
+./${VM_SCRIPTS.vmware}`}
         </pre>
       </div>
     </details>
