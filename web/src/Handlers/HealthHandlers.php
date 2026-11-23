@@ -5,6 +5,7 @@ namespace Monitor\Handlers;
 
 use Monitor\App;
 use Monitor\Clock;
+use Monitor\Http\HttpError;
 use Monitor\Http\Request;
 use Monitor\Http\Response;
 
@@ -66,5 +67,21 @@ final class HealthHandlers
         $script = is_file($path) ? (string) file_get_contents($path) : "#!/bin/sh\necho 'install script missing on server' >&2\nexit 1\n";
         $script = str_replace('__BASE_URL__', $this->app->baseUrl(), $script);
         return (new Response(200, $script))->withHeader('Content-Type', 'text/x-shellscript; charset=utf-8');
+    }
+
+    /** Scripts that create a proxy VM, offered for download on the Proxies page. */
+    public const VM_SCRIPTS = ['New-MonitorProxyVM-AHV.ps1', 'New-MonitorProxyVM-VMware.ps1'];
+
+    /** GET /vm/{file}: one of the VM_SCRIPTS as a download. They hold no secrets. */
+    public function vmScript(Request $req): Response
+    {
+        $file = $req->param('file');
+        $path = __DIR__ . '/../../resources/vm/' . $file;
+        if (!in_array($file, self::VM_SCRIPTS, true) || !is_file($path)) {
+            throw HttpError::notFound('no such script');
+        }
+        return (new Response(200, (string) file_get_contents($path)))
+            ->withHeader('Content-Type', 'text/plain; charset=utf-8')
+            ->withHeader('Content-Disposition', 'attachment; filename="' . $file . '"');
     }
 }

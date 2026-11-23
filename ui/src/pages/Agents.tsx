@@ -4,6 +4,25 @@ import { Link } from "react-router-dom";
 import { api, errorMessage, type Agent } from "../api/client";
 import { fmtAgo, fmtDateTime } from "../lib/format";
 
+const VM_SCRIPTS = {
+  ahv: "New-MonitorProxyVM-AHV.ps1",
+  vmware: "New-MonitorProxyVM-VMware.ps1",
+};
+
+/** Download links for the scripts that create a proxy VM. They hold no secrets. */
+function VmScripts() {
+  return (
+    <div className="row" style={{ gap: 8 }}>
+      <a className="btn sm" href={`/vm/${VM_SCRIPTS.ahv}`} download>
+        Download AHV script
+      </a>
+      <a className="btn sm" href={`/vm/${VM_SCRIPTS.vmware}`} download>
+        Download VMware script
+      </a>
+    </div>
+  );
+}
+
 /** First-boot file for running the proxy as a VM instead of on a Pi. */
 function VmSetup({ name, userData }: { name: string; userData: string }) {
   const [copied, setCopied] = useState<string | null>(null);
@@ -13,10 +32,11 @@ function VmSetup({ name, userData }: { name: string; userData: string }) {
       setTimeout(() => setCopied(null), 2000);
     });
   };
+  const fileName = `${name.toLowerCase().replace(/[^a-z0-9]+/g, "-") || "proxy"}-user-data.yaml`;
   const download = () => {
     const a = document.createElement("a");
     a.href = URL.createObjectURL(new Blob([userData], { type: "text/yaml" }));
-    a.download = `${name.toLowerCase().replace(/[^a-z0-9]+/g, "-") || "proxy"}-user-data.yaml`;
+    a.download = fileName;
     a.click();
     URL.revokeObjectURL(a.href);
   };
@@ -45,6 +65,20 @@ function VmSetup({ name, userData }: { name: string; userData: string }) {
         </div>
         <pre className="code" style={{ maxHeight: 260, overflowY: "auto" }}>
           {userData}
+        </pre>
+        <strong>Let a script build the VM</strong>
+        <span className="small muted">
+          These PowerShell 7 scripts download the Ubuntu image, create the VM with the file above
+          and power it on. Download the file and a script into one folder, then run the matching
+          command there with your own names filled in.
+        </span>
+        <VmScripts />
+        <pre className="code">
+          {`# Nutanix AHV, through Prism Central
+./${VM_SCRIPTS.ahv} -PrismCentral PC-ADDRESS -UserDataPath ./${fileName} -Subnet SUBNET-NAME -SkipCertificateCheck
+
+# VMware, through vCenter
+./${VM_SCRIPTS.vmware} -VCenter VCENTER-ADDRESS -UserDataPath ./${fileName} -Cluster CLUSTER -Datastore DATASTORE -Network "PORT-GROUP" -InstallPowerCLI -SkipCertificateCheck`}
         </pre>
       </div>
     </details>
@@ -307,8 +341,9 @@ export default function Agents() {
         <p className="small muted" style={{ margin: 0 }}>
           No Pi to hand? The same proxy runs as a small VM on Nutanix AHV or VMware: after you add a
           proxy, open <strong>Or run it as a VM</strong> under its key for a ready-made first-boot
-          file.
+          file. These PowerShell 7 scripts then create the VM for you:
         </p>
+        <VmScripts />
         <p className="small muted" style={{ margin: 0 }}>
           The proxy needs outbound HTTPS to this site and ICMP on the local network. It buffers up
           to 24 hours of results if this site is unreachable and backfills them with their original

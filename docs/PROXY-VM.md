@@ -36,8 +36,10 @@ lines near the top. The login user is `ubuntu`.
 
 ## 2. The quick way: a PowerShell script
 
-Two PowerShell 7 scripts in `deploy/vm/` do everything in section 3 for you:
-they download the Ubuntu cloud image (once; it is cached in `~/.monitor-proxy`
+Two PowerShell 7 scripts do everything in section 3 for you. Download them
+from the same **Or run it as a VM** section of the Proxies page (or from
+`web/resources/vm/` in this repository). They hold no secrets.
+They download the Ubuntu cloud image (once; it is cached in `~/.monitor-proxy`
 and checked against Ubuntu's published checksum), put it on the platform,
 create the VM with the first-boot file and power it on. Run them from any
 Windows, macOS or Linux computer that can reach Prism Central or vCenter.

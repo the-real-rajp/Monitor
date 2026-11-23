@@ -85,6 +85,7 @@ final class App
 
         $r->add('GET', '/api/health', $health->health(...), Auth::None);
         $r->add('GET', '/install.sh', $health->installScript(...), Auth::None);
+        $r->add('GET', '/vm/{file}', $health->vmScript(...), Auth::None);
 
         $r->add('POST', '/api/auth/login', $auth->login(...), Auth::None);
         $r->add('POST', '/api/auth/logout', $auth->logout(...), Auth::Session);
