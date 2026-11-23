@@ -47,6 +47,11 @@ export default function Layout() {
               Proxies
             </NavLink>
           )}
+          {isAdmin && (
+            <NavLink to="/users" className={({ isActive }) => (isActive ? "active" : "")}>
+              Users
+            </NavLink>
+          )}
         </nav>
         <div className="spacer" />
         <div className="row" style={{ gap: 8 }}>

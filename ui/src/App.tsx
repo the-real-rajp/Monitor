@@ -7,6 +7,7 @@ import DevicePage from "./pages/Device";
 import Devices from "./pages/Devices";
 import Agents from "./pages/Agents";
 import Account from "./pages/Account";
+import Users from "./pages/Users";
 
 export default function App() {
   return (
@@ -36,6 +37,14 @@ export default function App() {
             element={
               <RequireAuth admin>
                 <Agents />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="users"
+            element={
+              <RequireAuth admin>
+                <Users />
               </RequireAuth>
             }
           />

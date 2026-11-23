@@ -62,6 +62,74 @@ final class ApiTest extends TestCase
         $this->assertSame(200, $this->request('GET', '/api/overview', null, [], $cookie)->status);
     }
 
+    public function testUserManagement(): void
+    {
+        $adminId = $this->createUser();
+        $cookie = $this->login();
+
+        // Create, with validation and duplicate checks.
+        $new = ['email' => 'Sam@Test.local', 'name' => 'Sam', 'role' => 'viewer', 'password' => 'a-long-first-password'];
+        $r = $this->request('POST', '/api/users', $new, [], $cookie);
+        $this->assertSame(201, $r->status, $r->body);
+        $sam = $this->json($r);
+        $this->assertSame('sam@test.local', $sam['email']);
+        $this->assertSame('viewer', $sam['role']);
+        $this->assertArrayNotHasKey('password_hash', $sam);
+        $this->assertSame(409, $this->request('POST', '/api/users', $new, [], $cookie)->status, 'duplicate email');
+        $this->assertSame(400, $this->request('POST', '/api/users', ['email' => 'x@test.local', 'name' => 'X', 'role' => 'viewer', 'password' => 'short'], [], $cookie)->status);
+        $this->assertSame(400, $this->request('POST', '/api/users', ['email' => 'x@test.local', 'name' => 'X', 'role' => 'owner', 'password' => 'a-long-first-password'], [], $cookie)->status);
+
+        $r = $this->request('GET', '/api/users', null, [], $cookie);
+        $this->assertSame(200, $r->status);
+        $this->assertCount(2, $this->json($r)['users']);
+
+        // A viewer cannot manage users.
+        $samCookie = $this->login('sam@test.local', 'a-long-first-password');
+        $this->assertSame(403, $this->request('GET', '/api/users', null, [], $samCookie)->status);
+        $this->assertSame(403, $this->request('PATCH', "/api/users/{$sam['id']}", ['role' => 'admin'], [], $samCookie)->status);
+
+        // Edit.
+        $r = $this->request('PATCH', "/api/users/{$sam['id']}", ['name' => 'Sam Lee', 'email' => 'sam.lee@test.local'], [], $cookie);
+        $this->assertSame(200, $r->status, $r->body);
+        $this->assertSame('Sam Lee', $this->json($r)['name']);
+        $this->assertSame(409, $this->request('PATCH', "/api/users/{$sam['id']}", ['email' => 'admin@test.local'], [], $cookie)->status);
+        $this->assertSame(404, $this->request('PATCH', '/api/users/9999', ['name' => 'Nobody'], [], $cookie)->status);
+
+        // Resetting a password signs the user out and the new one works.
+        $r = $this->request('POST', "/api/users/{$sam['id']}/password", ['password' => 'a-brand-new-password'], [], $cookie);
+        $this->assertSame(204, $r->status, $r->body);
+        $this->assertSame(401, $this->request('GET', '/api/auth/me', null, [], $samCookie)->status);
+        $samCookie = $this->login('sam.lee@test.local', 'a-brand-new-password');
+        $this->assertSame(409, $this->request('POST', "/api/users/$adminId/password", ['password' => 'a-brand-new-password'], [], $cookie)->status, 'own password goes through the Account page');
+
+        // Disabling signs the user out and blocks login; enabling restores it.
+        $r = $this->request('PATCH', "/api/users/{$sam['id']}", ['disabled' => true], [], $cookie);
+        $this->assertTrue($this->json($r)['disabled']);
+        $this->assertSame(401, $this->request('GET', '/api/auth/me', null, [], $samCookie)->status);
+        $this->assertSame(401, $this->request('POST', '/api/auth/login', ['email' => 'sam.lee@test.local', 'password' => 'a-brand-new-password'])->status);
+        $r = $this->request('PATCH', "/api/users/{$sam['id']}", ['disabled' => false], [], $cookie);
+        $this->assertFalse($this->json($r)['disabled']);
+        $this->login('sam.lee@test.local', 'a-brand-new-password');
+
+        // An admin cannot lock themselves out.
+        $this->assertSame(409, $this->request('PATCH', "/api/users/$adminId", ['role' => 'viewer'], [], $cookie)->status);
+        $this->assertSame(409, $this->request('PATCH', "/api/users/$adminId", ['disabled' => true], [], $cookie)->status);
+        $this->assertSame(409, $this->request('DELETE', "/api/users/$adminId", null, [], $cookie)->status);
+        $this->assertSame(200, $this->request('PATCH', "/api/users/$adminId", ['name' => 'Renamed Admin'], [], $cookie)->status, 'other self-edits are fine');
+
+        // With a second admin, the first can be demoted by them.
+        $this->assertSame(200, $this->request('PATCH', "/api/users/{$sam['id']}", ['role' => 'admin'], [], $cookie)->status);
+        $samCookie = $this->login('sam.lee@test.local', 'a-brand-new-password');
+        $this->assertSame(200, $this->request('PATCH', "/api/users/$adminId", ['role' => 'viewer'], [], $samCookie)->status);
+        $this->assertSame(403, $this->request('GET', '/api/users', null, [], $cookie)->status, 'demotion applies at once');
+
+        // Delete.
+        $this->assertSame(204, $this->request('DELETE', "/api/users/$adminId", null, [], $samCookie)->status);
+        $this->assertSame(401, $this->request('GET', '/api/auth/me', null, [], $cookie)->status);
+        $this->assertSame(404, $this->request('DELETE', "/api/users/$adminId", null, [], $samCookie)->status);
+        $this->assertCount(1, $this->json($this->request('GET', '/api/users', null, [], $samCookie))['users']);
+    }
+
     public function testDeviceValidationAndCrud(): void
     {
         $this->createUser();
