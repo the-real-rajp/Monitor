@@ -158,6 +158,26 @@ button:disabled {
 .refresh-now {
   min-width: 86px;
 }
+.subnav {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid var(--border);
+}
+.subnav a {
+  padding: 8px 14px;
+  color: var(--text-2);
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+}
+.subnav a:hover {
+  text-decoration: none;
+  color: var(--text);
+}
+.subnav a.active {
+  color: var(--accent-ink);
+  border-bottom-color: var(--accent);
+  font-weight: 600;
+}
 .spacer {
   flex: 1 1 auto;
 }
