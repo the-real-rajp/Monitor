@@ -165,6 +165,8 @@ export interface Overview {
   };
   agents: Agent[];
   web_pinger: { method: string; last_run_at: string | null; last_error: string | null };
+  /** How long individual pings and hourly summaries are kept, in days. */
+  retention: { raw_days: number; hourly_days: number };
   groups: { id: number | null; name: string; devices: OverviewDevice[] }[];
 }
 

@@ -259,6 +259,7 @@ final class ApiTest extends TestCase
         $this->assertCount(60, $dev['spark']);
         $this->assertEqualsWithDelta(97.5, $dev['uptime_24h'], 0.01);
         $this->assertTrue($o['agents'][0]['online']);
+        $this->assertSame(['raw_days' => 7, 'hourly_days' => 400], $o['retention']);
 
         $h = $this->json($this->request('GET', '/api/devices/' . $id . '/history', null, [], $cookie, ['range' => '1h']));
         $this->assertSame('raw', $h['resolution']);

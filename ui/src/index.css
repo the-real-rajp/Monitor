@@ -6,10 +6,11 @@
   --text: #161a20;
   --text-2: #3c4450;
   --muted: #5b6470;
-  --faint: #8a93a0;
+  --faint: #656e7a;
   --accent: #2457d6;
   --accent-ink: #1a43ad;
   --accent-soft: #edf1fb;
+  --on-accent: #ffffff;
   --ok: #1e9e5a;
   --ok-ink: #16653a;
   --ok-soft: #f0faf4;
@@ -44,10 +45,11 @@
     --text: #e6e8eb;
     --text-2: #c5cad2;
     --muted: #9aa3ae;
-    --faint: #727b87;
+    --faint: #808995;
     --accent: #5b8def;
     --accent-ink: #9ab8f5;
     --accent-soft: #1b2740;
+    --on-accent: #0f1115;
     --ok: #2fb86e;
     --ok-ink: #7ad8a4;
     --ok-soft: #122a1c;
@@ -204,9 +206,38 @@ main.page {
   color: var(--muted);
   text-align: center;
 }
+.topbar-tools {
+  gap: 8px;
+  flex-wrap: nowrap;
+}
 @media (max-width: 720px) {
   .topbar {
-    padding: 0 16px;
+    padding: 8px 16px;
+    gap: 8px 12px;
+  }
+  .topbar .brand {
+    order: 1;
+  }
+  .topbar .spacer {
+    order: 2;
+  }
+  .topbar-tools {
+    order: 3;
+    min-width: 0;
+  }
+  .topbar .nav {
+    order: 4;
+    flex: 1 0 100%;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+  }
+  .refresh-select {
+    min-width: 0;
+    width: 132px;
+    text-overflow: ellipsis;
+  }
+  .refresh-now {
+    min-width: 0;
   }
   main.page {
     padding: 16px;
@@ -258,6 +289,17 @@ main.page {
 .dot.unknown {
   background: var(--faint);
 }
+.only-sm {
+  display: none !important;
+}
+@media (max-width: 720px) {
+  .hide-sm {
+    display: none !important;
+  }
+  .only-sm {
+    display: revert !important;
+  }
+}
 
 /* cards and stats */
 .card {
@@ -265,6 +307,49 @@ main.page {
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 20px 24px;
+}
+.status {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.status-line {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  font-size: 26px;
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+}
+.status-line .dot {
+  width: 12px;
+  height: 12px;
+  transform: translateY(-2px);
+}
+.status.danger .status-line {
+  color: var(--danger-ink);
+}
+.facts {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 36px;
+}
+.facts dt {
+  font-size: 12px;
+  color: var(--muted);
+}
+.facts dd {
+  margin: 2px 0 0;
+  font-size: 16px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.facts .aside {
+  margin-left: 8px;
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--muted);
 }
 .stat-grid {
   display: grid;
@@ -295,7 +380,8 @@ main.page {
 .stat .value {
   font-size: 28px;
   font-weight: 700;
-  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
   line-height: 1.1;
 }
 .stat .value .unit {
@@ -303,7 +389,7 @@ main.page {
   font-weight: 500;
   color: var(--muted);
   margin-left: 4px;
-  font-family: Inter, system-ui, sans-serif;
+  letter-spacing: 0;
 }
 .stat .sub {
   font-size: 13px;
@@ -413,7 +499,8 @@ main.page {
 .tile .rtt {
   font-size: 24px;
   font-weight: 700;
-  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
   line-height: 1;
 }
 .tile .rtt .unit {
@@ -421,7 +508,7 @@ main.page {
   font-weight: 500;
   color: var(--muted);
   margin-left: 3px;
-  font-family: Inter, system-ui, sans-serif;
+  letter-spacing: 0;
 }
 .tile .rtt.down {
   color: var(--danger-ink);
@@ -518,7 +605,7 @@ tr:last-child td {
 .btn.primary {
   background: var(--accent);
   border-color: var(--accent);
-  color: #fff;
+  color: var(--on-accent);
   font-weight: 600;
 }
 .btn.primary:hover {
@@ -527,6 +614,11 @@ tr:last-child td {
 .btn.danger {
   color: var(--danger-ink);
   border-color: var(--danger-border);
+}
+/* In a table, a destructive action on every row stays quiet until it is pointed at. */
+td .btn.danger:not(:hover):not(:focus-visible) {
+  color: var(--text-2);
+  border-color: var(--border);
 }
 .btn.sm {
   min-height: 30px;
@@ -552,7 +644,7 @@ tr:last-child td {
 }
 .seg button[aria-pressed="true"] {
   background: var(--accent);
-  color: #fff;
+  color: var(--on-accent);
 }
 form.stack {
   display: flex;
@@ -670,10 +762,31 @@ pre.code {
   border: 0;
   padding: 0;
   height: 44px;
+  min-width: 0;
 }
-.strip .cell:hover {
+.strip .cell:hover,
+.strip .cell[aria-pressed="true"] {
   outline: 2px solid var(--text);
   outline-offset: 1px;
+}
+/* State is carried by shape as well as colour: stripes below 99%, hollow for no data. */
+.day-ok {
+  background: var(--ok);
+}
+.day-warn {
+  background: var(--warn);
+}
+.day-bad {
+  background: repeating-linear-gradient(135deg, var(--danger) 0 4px, var(--danger-ink) 4px 6px);
+}
+.day-none {
+  background: transparent;
+  box-shadow: inset 0 0 0 1.5px var(--nodata);
+}
+.strip-readout {
+  font-size: 13px;
+  color: var(--text-2);
+  min-height: 1.45em;
 }
 .legend {
   font-size: 12px;
@@ -758,6 +871,13 @@ pre.code {
 }
 .u-inline {
   display: block;
+}
+/* The key lives under the chart; uPlot's own legend only reads out values while pointing. */
+.chart:not(:hover) .u-legend {
+  visibility: hidden;
+}
+.u-legend .u-marker {
+  display: none !important;
 }
 .u-inline * {
   display: inline-block;

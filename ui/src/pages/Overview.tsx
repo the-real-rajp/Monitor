@@ -4,11 +4,12 @@ import { api, type Overview as OverviewData, type OverviewDevice } from "../api/
 import Sparkline from "../components/Sparkline";
 import { fmtAgo, fmtDuration, fmtFor, fmtPct, fmtRtt } from "../lib/format";
 import { useAuth } from "../lib/auth";
-import { useRefresh } from "../lib/refresh";
+import { refreshLabel, useRefresh } from "../lib/refresh";
 
 export default function Overview() {
   const { me } = useAuth();
-  const { ms } = useRefresh();
+  const { ms, choice, siteDefault } = useRefresh();
+  const refreshS = choice === "default" ? siteDefault : choice;
   const q = useQuery({
     queryKey: ["overview"],
     queryFn: () => api.get<OverviewData>("/api/overview"),
@@ -22,56 +23,77 @@ export default function Overview() {
   const down = all.filter((d) => d.state === "down");
   const offlineAgents = o.agents.filter((a) => !a.online);
   const hasWeb = all.some((d) => d.source === "web");
+  const { devices: total, unknown } = o.summary;
+  const headline =
+    total === 0
+      ? { tone: "", dot: "", text: "Nothing is being monitored yet" }
+      : down.length > 0
+        ? {
+            tone: "danger",
+            dot: "down",
+            text:
+              down.length === 1
+                ? `${down[0]!.name} is down`
+                : `${down.length} of ${total} devices are down`,
+          }
+        : unknown > 0
+          ? {
+              tone: "",
+              dot: "unknown",
+              text: `Nothing is down, but ${unknown} device${unknown === 1 ? " has" : "s have"} no data`,
+            }
+          : {
+              tone: "ok",
+              dot: "up",
+              text: total === 1 ? "The one device is up" : `All ${total} devices are up`,
+            };
+  const checks = [
+    ...o.agents.map((a) => ({ name: a.name, at: a.last_seen_at, stale: !a.online })),
+    ...(hasWeb
+      ? [{ name: "Website", at: o.web_pinger.last_run_at, stale: !!o.web_pinger.last_error }]
+      : []),
+  ];
 
   return (
     <>
-      <section className="stat-grid" aria-label="Summary">
-        <div className="stat">
-          <div className="label">Devices</div>
-          <div className="value">{o.summary.devices}</div>
-          <div className="sub">
-            {all.filter((d) => d.source === "agent").length} on proxies ·{" "}
-            {all.filter((d) => d.source === "web").length} from the website
+      <section className={`status ${headline.tone}`} aria-label="Summary">
+        <h1 className="status-line">
+          <span className={`dot ${headline.dot}`} />
+          {headline.text}
+        </h1>
+        <dl className="facts">
+          <div>
+            <dt>Up</dt>
+            <dd>
+              {o.summary.up} of {o.summary.devices}
+            </dd>
           </div>
-        </div>
-        <div className="stat">
-          <div className="label">Up right now</div>
-          <div className="value ok-ink">{o.summary.up}</div>
-          <div className="sub">
-            {o.summary.down > 0 ? (
-              <span className="danger-ink" style={{ fontWeight: 600 }}>
-                {o.summary.down} down
-              </span>
-            ) : (
-              "nothing down"
-            )}
-            {o.summary.unknown > 0 && ` · ${o.summary.unknown} unknown`}
+          {o.summary.unknown > 0 && (
+            <div>
+              <dt>No data</dt>
+              <dd>{o.summary.unknown}</dd>
+            </div>
+          )}
+          <div>
+            <dt>30-day uptime</dt>
+            <dd>{fmtPct(o.summary.uptime_30d)}</dd>
           </div>
-        </div>
-        <div className="stat">
-          <div className="label">30-day uptime</div>
-          <div className="value">{fmtPct(o.summary.uptime_30d)}</div>
-          <div className="sub">
-            {o.summary.outages_30d} outage{o.summary.outages_30d === 1 ? "" : "s"}
-            {o.summary.longest_outage_30d_s !== null &&
-              `, longest ${fmtDuration(o.summary.longest_outage_30d_s)}`}
+          <div>
+            <dt>Outages in 30 days</dt>
+            <dd>
+              {o.summary.outages_30d}
+              {o.summary.longest_outage_30d_s !== null && (
+                <span className="aside">longest {fmtDuration(o.summary.longest_outage_30d_s)}</span>
+              )}
+            </dd>
           </div>
-        </div>
-        <div className="stat">
-          <div className="label">Last checks</div>
-          <div className="value" style={{ fontSize: 22 }}>
-            {o.agents[0]
-              ? fmtAgo(o.agents[0].last_seen_at)
-              : hasWeb
-                ? fmtAgo(o.web_pinger.last_run_at)
-                : "—"}
-          </div>
-          <div className="sub">
-            {o.agents.map((a) => `${a.name} ${fmtAgo(a.last_seen_at)}`).join(" · ")}
-            {hasWeb &&
-              `${o.agents.length ? " · " : ""}website cron ${fmtAgo(o.web_pinger.last_run_at)}`}
-          </div>
-        </div>
+          {checks.map((c) => (
+            <div key={c.name}>
+              <dt>{c.name} checked</dt>
+              <dd className={c.stale ? "danger-ink" : undefined}>{fmtAgo(c.at)}</dd>
+            </div>
+          ))}
+        </dl>
       </section>
 
       {offlineAgents.map((a) => (
@@ -112,31 +134,48 @@ export default function Overview() {
           </h2>
           <div className="tiles">
             {down.map((d) => (
-              <Tile key={d.id} d={d} />
+              <Tile key={d.id} d={d} group={o.groups.find((g) => g.devices.includes(d))?.name} />
             ))}
           </div>
         </section>
       )}
 
-      {o.groups.map((g) => (
-        <section key={g.id ?? "none"} className="col">
-          <h2 className="section-title">
-            {g.name}
-            <span className="note">{groupNote(g.devices)}</span>
-          </h2>
-          <div className="tiles">
-            {g.devices.map((d) => (
-              <Tile key={d.id} d={d} />
-            ))}
-          </div>
-        </section>
-      ))}
+      {o.groups.map((g) => {
+        // Down devices are already listed under "Down"; each device has one tile.
+        const rest = g.devices.filter((d) => d.state !== "down");
+        const nDown = g.devices.length - rest.length;
+        return (
+          <section key={g.id ?? "none"} className="col">
+            <h2 className="section-title">
+              {g.name}
+              <span className="note">
+                {groupNote(g.devices)}
+                {nDown > 0 && ` · ${nDown} down, listed above`}
+              </span>
+            </h2>
+            {rest.length > 0 && (
+              <div className="tiles">
+                {rest.map((d) => (
+                  <Tile key={d.id} d={d} />
+                ))}
+              </div>
+            )}
+          </section>
+        );
+      })}
 
       <p className="small faint" style={{ margin: 0 }}>
-        Refreshes every 10 seconds · raw results kept 7 days, hourly history 13 months
+        {refreshS > 0 ? `Refreshes every ${refreshLabel(refreshS)}` : "Auto-refresh is off"}
+        {o.retention &&
+          ` · individual pings kept ${fmtDays(o.retention.raw_days)}, hourly history ${fmtDays(o.retention.hourly_days)}`}
       </p>
     </>
   );
+}
+
+function fmtDays(days: number): string {
+  if (days >= 60) return `${Math.round(days / 30.44)} months`;
+  return `${days} day${days === 1 ? "" : "s"}`;
 }
 
 function groupNote(devices: OverviewDevice[]): string {
@@ -148,15 +187,16 @@ function groupNote(devices: OverviewDevice[]): string {
   return [...srcs].join(", ") + every;
 }
 
-function Tile({ d }: { d: OverviewDevice }) {
+function Tile({ d, group }: { d: OverviewDevice; group?: string }) {
+  // Only the exceptions get a badge; a plain ICMP reply is the normal case.
   const badge =
     d.state === "down"
       ? `down ${fmtFor(d.since)}`
       : d.state === "unknown"
         ? "no data"
         : d.last_method === "tcp"
-          ? "tcp"
-          : "icmp";
+          ? "TCP"
+          : null;
   return (
     <Link to={`/devices/${d.id}`} className={`tile ${d.state}`}>
       <div className="head">
@@ -165,9 +205,14 @@ function Tile({ d }: { d: OverviewDevice }) {
             <span className={`dot ${d.state}`} />
             {d.name}
           </div>
-          <div className="host">{d.host}</div>
+          <div className="host">
+            {d.host}
+            {group && ` · ${group}`}
+          </div>
         </div>
-        <span className={`pill soft ${d.state === "down" ? "danger" : ""}`}>{badge}</span>
+        {badge && (
+          <span className={`pill soft ${d.state === "down" ? "danger" : ""}`}>{badge}</span>
+        )}
       </div>
       <div className="foot">
         <div>

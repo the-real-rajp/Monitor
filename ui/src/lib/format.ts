@@ -49,10 +49,3 @@ export function fmtDay(ymd: string): string {
   const [y, m, d] = ymd.split("-").map(Number);
   return dShort.format(new Date(y!, m! - 1, d!));
 }
-
-export function uptimeColor(p: number | null): string {
-  if (p === null) return "var(--nodata)";
-  if (p >= 99.9) return "var(--ok)";
-  if (p >= 99) return "var(--warn)";
-  return "var(--danger)";
-}

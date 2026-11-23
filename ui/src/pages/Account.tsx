@@ -1,10 +1,12 @@
 import { useState, type FormEvent } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { api, errorMessage } from "../api/client";
+import { useNavigate } from "react-router-dom";
 import { useAuth } from "../lib/auth";
 
 export default function Account() {
-  const { me } = useAuth();
+  const { me, logout } = useAuth();
+  const nav = useNavigate();
   const [current, setCurrent] = useState("");
   const [next, setNext] = useState("");
   const [confirmPw, setConfirmPw] = useState("");
@@ -38,7 +40,18 @@ export default function Account() {
 
   return (
     <>
-      <h1>Account</h1>
+      <div className="row between">
+        <h1>Account</h1>
+        <button
+          className="btn only-sm"
+          onClick={async () => {
+            await logout();
+            nav("/login");
+          }}
+        >
+          Log out
+        </button>
+      </div>
       <div className="table-card" style={{ maxWidth: 520 }}>
         <table>
           <tbody>
