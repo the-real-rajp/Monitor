@@ -1,4 +1,4 @@
-# Builds the dashboard and publishes a deployable tree to the `deploy` branch.
+# Builds the dashboard and commits a deployable tree to the `deploy` branch.
 # cPanel's Git Version Control pulls that branch; its .cpanel.yml copies the
 # web/ directory into place. Nothing is built on the shared host.
 name: deploy-branch
@@ -45,12 +45,18 @@ jobs:
           cp deploy/cpanel/README.md /tmp/deploy/README.md
           echo "$GITHUB_SHA" > /tmp/deploy/web/BUILD
       - name: Push deploy branch
+        # Each build is a new commit on top of the previous deploy commit, so
+        # cPanel's "Update from Remote" (a fast-forward pull) keeps working.
         run: |
           set -e
           cd /tmp/deploy
           git init -q -b deploy
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
+          git remote add origin "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git"
+          if git fetch -q --depth=1 origin deploy; then
+            git reset -q --soft FETCH_HEAD
+          fi
           git add -A
           git commit -q -m "Deploy build of ${GITHUB_SHA::7}"
-          git push --force "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" deploy:deploy
+          git push origin deploy:deploy
