@@ -409,19 +409,44 @@ function DeviceForm({
   );
 }
 
-/** Common groups offered for one-click adding. Nothing is created until asked. */
-const SUGGESTED_GROUPS = [
-  "Firewalls",
-  "Internet",
-  "Switches",
-  "Wireless",
-  "Servers",
-  "Hypervisors",
-  "Storage",
-  "Printers",
-  "Phones",
-  "Cameras",
-  "UPS & Power",
+/** Common groups offered for one-click adding, by area. Nothing is created until asked. */
+const SUGGESTED_GROUPS: { area: string; names: string[] }[] = [
+  {
+    area: "Network",
+    names: ["Firewalls", "Routers", "Switches", "Wireless", "Internet", "VPN", "Load Balancers"],
+  },
+  {
+    area: "Infrastructure",
+    names: [
+      "Hypervisors",
+      "Storage",
+      "Backup",
+      "Out-of-Band Management",
+      "UPS & Power",
+      "Environmental Sensors",
+    ],
+  },
+  {
+    area: "Servers",
+    names: [
+      "Windows Servers",
+      "Linux Servers",
+      "Domain Controllers",
+      "Database Servers",
+      "File Servers",
+      "Web Servers",
+      "Mail Servers",
+      "Application Servers",
+    ],
+  },
+  {
+    area: "Services",
+    names: ["DNS", "DHCP", "NTP", "Websites", "Cloud Services", "Remote Access"],
+  },
+  {
+    area: "Endpoints",
+    names: ["Workstations", "Printers", "Phones", "Cameras", "Door Access"],
+  },
 ];
 
 function GroupsButton({ groups, onChange }: { groups: Group[]; onChange: () => void }) {
@@ -447,7 +472,10 @@ function GroupsButton({ groups, onChange }: { groups: Group[]; onChange: () => v
     onSettled: onChange,
   });
   const existing = new Set(groups.map((g) => g.name.trim().toLowerCase()));
-  const suggestions = SUGGESTED_GROUPS.filter((n) => !existing.has(n.toLowerCase()));
+  const suggestions = SUGGESTED_GROUPS.map((g) => ({
+    area: g.area,
+    names: g.names.filter((n) => !existing.has(n.toLowerCase())),
+  })).filter((g) => g.names.length > 0);
   const rename = useMutation({
     mutationFn: (g: { id: number; name: string }) =>
       api.patch(`/api/groups/${g.id}`, { name: g.name }),
@@ -467,7 +495,16 @@ function GroupsButton({ groups, onChange }: { groups: Group[]; onChange: () => v
       {open && (
         <div
           className="card col"
-          style={{ position: "absolute", zIndex: 5, top: "calc(100% + 8px)", right: 0, width: 360 }}
+          style={{
+            position: "absolute",
+            zIndex: 5,
+            top: "calc(100% + 8px)",
+            right: 0,
+            width: 460,
+            maxWidth: "92vw",
+            maxHeight: "calc(100vh - 170px)",
+            overflowY: "auto",
+          }}
         >
           <h2>Groups</h2>
           {groups.map((g) => (
@@ -517,30 +554,36 @@ function GroupsButton({ groups, onChange }: { groups: Group[]; onChange: () => v
             </button>
           </form>
           {suggestions.length > 0 && (
-            <div className="col" style={{ gap: 8 }}>
-              <div className="row between">
-                <span className="small muted">Suggested groups. Click one to add it.</span>
-                <button
-                  className="btn sm"
-                  onClick={() => addSuggested.mutate(suggestions)}
-                  disabled={addSuggested.isPending}
-                >
-                  Add all
-                </button>
-              </div>
-              <div className="row" style={{ gap: 6, flexWrap: "wrap" }}>
-                {suggestions.map((n) => (
-                  <button
-                    key={n}
-                    className="btn sm"
-                    onClick={() => addSuggested.mutate([n])}
-                    disabled={addSuggested.isPending}
-                    aria-label={`Add group ${n}`}
-                  >
-                    + {n}
-                  </button>
-                ))}
-              </div>
+            <div className="col" style={{ gap: 10 }}>
+              <span className="small muted">Suggested groups. Click one to add it.</span>
+              {suggestions.map((g) => (
+                <div key={g.area} className="col" style={{ gap: 6 }}>
+                  <div className="row between">
+                    <strong className="small">{g.area}</strong>
+                    <button
+                      className="btn sm"
+                      onClick={() => addSuggested.mutate(g.names)}
+                      disabled={addSuggested.isPending}
+                      aria-label={`Add all ${g.area} groups`}
+                    >
+                      Add all {g.names.length}
+                    </button>
+                  </div>
+                  <div className="row" style={{ gap: 6, flexWrap: "wrap" }}>
+                    {g.names.map((n) => (
+                      <button
+                        key={n}
+                        className="btn sm"
+                        onClick={() => addSuggested.mutate([n])}
+                        disabled={addSuggested.isPending}
+                        aria-label={`Add group ${n}`}
+                      >
+                        + {n}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ))}
             </div>
           )}
           {error && <div className="error">{error}</div>}
