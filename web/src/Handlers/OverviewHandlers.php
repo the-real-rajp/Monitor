@@ -10,12 +10,15 @@ use Monitor\Http\Response;
 
 /**
  * GET /api/overview: everything the dashboard's front page needs in one
- * response. Reads device_status, the last hour of raw results for
- * sparklines, 24 hours of raw results for per-device uptime, and
- * ping_hourly plus events for the 30-day summary.
+ * response. Reads device_status, 24 hours of raw results for per-device
+ * uptime, and ping_hourly plus events for the daily strips and the 30-day
+ * summary.
  */
 final class OverviewHandlers
 {
+    /** Days of daily uptime returned per device. */
+    private const DAYS = 30;
+
     public function __construct(private readonly App $app)
     {
     }
@@ -46,18 +49,34 @@ final class OverviewHandlers
             $uptime24[(int) $r['device_id']] = (int) $r['sent'] > 0 ? round(100 * (int) $r['received'] / (int) $r['sent'], 2) : null;
         }
 
-        // Sparklines: 60 one-minute buckets of average RTT; null where every ping timed out, absent where no data.
-        $sparkStart = $now - 3600;
-        $buckets = [];
+        // Daily uptime for the last 30 calendar days in the site's time zone, per device.
+        // Day boundaries are computed here so the grouping is right across DST changes.
+        $tz = $this->app->timezone();
+        $today = (new \DateTimeImmutable('@' . $now))->setTimezone($tz)->setTime(0, 0);
+        $utc = new \DateTimeZone('UTC');
+        $dates = [];
+        $bounds = [];
+        $args = [];
+        for ($i = 0; $i < self::DAYS; $i++) {
+            $start = $today->sub(new \DateInterval('P' . (self::DAYS - 1 - $i) . 'D'));
+            $dates[] = $start->format('Y-m-d');
+            $bounds[] = 'SELECT ? AS idx, ? AS s, ? AS e';
+            array_push(
+                $args,
+                $i,
+                $start->setTimezone($utc)->format('Y-m-d H:i:s'),
+                $start->add(new \DateInterval('P1D'))->setTimezone($utc)->format('Y-m-d H:i:s'),
+            );
+        }
+        $daily = [];
         foreach ($db->all(
-            'SELECT device_id, FLOOR(UNIX_TIMESTAMP(ts) / 60) AS m, AVG(rtt_ms) AS avg_rtt, SUM(rtt_ms IS NULL) AS timeouts, COUNT(*) AS n
-               FROM ping_results WHERE ts >= ? GROUP BY device_id, m',
-            [Clock::toDb($sparkStart)],
+            'SELECT h.device_id, b.idx, SUM(h.sent) AS sent, SUM(h.received) AS received
+               FROM (' . implode(' UNION ALL ', $bounds) . ') b
+               JOIN ping_hourly h ON h.hour >= b.s AND h.hour < b.e
+              GROUP BY h.device_id, b.idx',
+            $args,
         ) as $r) {
-            $idx = (int) $r['m'] - intdiv($sparkStart, 60);
-            if ($idx >= 0 && $idx < 60) {
-                $buckets[(int) $r['device_id']][$idx] = $r['avg_rtt'] === null ? null : round((float) $r['avg_rtt'], 2);
-            }
+            $daily[(int) $r['device_id']][(int) $r['idx']] = [(int) $r['sent'], (int) $r['received']];
         }
 
         $groups = [];
@@ -66,11 +85,15 @@ final class OverviewHandlers
             $id = (int) $d['id'];
             $state = $d['state'] ?? 'unknown';
             $counts[$state] = ($counts[$state] ?? 0) + 1;
-            $spark = array_fill(0, 60, null);
-            $hasAny = false;
-            foreach ($buckets[$id] ?? [] as $i => $v) {
-                $spark[$i] = $v;
-                $hasAny = true;
+            $days = array_fill(0, self::DAYS, null);
+            $sent = 0;
+            $received = 0;
+            foreach ($daily[$id] ?? [] as $i => [$ds, $dr]) {
+                if ($ds > 0) {
+                    $days[$i] = round(100 * $dr / $ds, 2);
+                    $sent += $ds;
+                    $received += $dr;
+                }
             }
             $gid = $d['group_id'] === null ? 0 : (int) $d['group_id'];
             $groups[$gid] ??= ['id' => $gid === 0 ? null : $gid, 'name' => $d['group_name'] ?? 'Ungrouped', 'devices' => []];
@@ -88,7 +111,8 @@ final class OverviewHandlers
                 'last_rtt_ms'       => $d['last_rtt_ms'] === null ? null : (float) $d['last_rtt_ms'],
                 'last_method'       => $d['last_method'],
                 'uptime_24h'        => $uptime24[$id] ?? null,
-                'spark'             => $hasAny ? $spark : null,
+                'uptime_30d'        => $sent > 0 ? round(100 * $received / $sent, 2) : null,
+                'days'              => $days,
             ];
         }
 
@@ -129,6 +153,8 @@ final class OverviewHandlers
                 'raw_days'    => $this->app->settings->rawRetentionDays(),
                 'hourly_days' => $this->app->settings->hourlyRetentionDays(),
             ],
+            'timezone' => $tz->getName(),
+            'days' => $dates,
             'groups' => array_values($groups),
         ]);
     }

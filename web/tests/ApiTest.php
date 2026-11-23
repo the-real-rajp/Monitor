@@ -256,7 +256,10 @@ final class ApiTest extends TestCase
         $this->assertSame(1, $o['summary']['outages_30d']);
         $dev = $o['groups'][0]['devices'][0];
         $this->assertSame('up', $dev['state']);
-        $this->assertCount(60, $dev['spark']);
+        $this->assertCount(30, $o['days']);
+        $this->assertCount(30, $dev['days']);
+        $this->assertNotNull($dev['days'][29]);
+        $this->assertNotNull($dev['uptime_30d']);
         $this->assertEqualsWithDelta(97.5, $dev['uptime_24h'], 0.01);
         $this->assertTrue($o['agents'][0]['online']);
         $this->assertSame(['raw_days' => 7, 'hourly_days' => 400], $o['retention']);

@@ -87,14 +87,14 @@ export default function RttChart({ history }: { history: History }) {
           stroke: text,
           grid: { stroke: grid },
           ticks: { stroke: grid },
-          font: "11px JetBrains Mono, monospace",
+          font: "11px IBM Plex Mono, monospace",
         },
         {
           stroke: text,
           grid: { stroke: grid },
           ticks: { stroke: grid },
           size: 50,
-          font: "11px JetBrains Mono, monospace",
+          font: "11px IBM Plex Mono, monospace",
           values: (_u, vals) =>
             vals.map((v) => (v >= 100 ? v.toFixed(0) : v.toFixed(v < 10 ? 1 : 0))),
         },

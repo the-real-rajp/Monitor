@@ -119,7 +119,7 @@ All responses JSON. Errors use `{"error": {"code", "message"}}`.
 | Method and path | Who | Purpose |
 |---|---|---|
 | `POST /api/auth/login`, `POST /api/auth/logout`, `GET /api/auth/me` | browser | Sessions |
-| `GET /api/overview` | browser | Every device with current status, last RTT, 24h uptime and a 60-point sparkline, in one call |
+| `GET /api/overview` | browser | Every device with current status, last RTT, 24h and 30-day uptime and 30 days of daily uptime, in one call |
 | `GET /api/devices/{id}/history?range=1h|24h|7d|30d` | browser | Raw points for 1h and 24h, hourly rollups for 7d and 30d |
 | `GET /api/devices/{id}/days?days=30` | browser | Per-day uptime percentage and outage count for the 30-day bar strip |
 | `GET /api/devices/{id}/events` | browser | Outage log with durations |
@@ -132,11 +132,12 @@ All responses JSON. Errors use `{"error": {"code", "message"}}`.
 
 ## 5. The dashboard
 
-- **Overview.** Device tiles grouped by `device_groups`. Each tile: name,
-  host, a large status dot, current RTT, 24-hour uptime, and a one-hour
-  sparkline. Down devices float to the top. A banner appears when an agent has
-  not sent a heartbeat for two minutes, because then every device behind it is
-  unknown, not down. Polls every 10 seconds.
+- **Overview.** A status line, then one row per device grouped by
+  `device_groups`. Each row: name, host, a strip of daily uptime for the last
+  30 days, 30-day uptime and current RTT. Down devices are listed first. A
+  banner appears when an agent has not sent a heartbeat for two minutes,
+  because then every device behind it is unknown, not down. Refreshes on the
+  configured interval.
 - **Device page.** The 30-day uptime strip (one bar per day, green to red by
   availability, hover for outages that day). Below it the RTT chart with a
   range switch (1h, 24h, 7d, 30d), min/avg/max bands on rolled-up ranges,

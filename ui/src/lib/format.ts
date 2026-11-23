@@ -49,3 +49,11 @@ export function fmtDay(ymd: string): string {
   const [y, m, d] = ymd.split("-").map(Number);
   return dShort.format(new Date(y!, m! - 1, d!));
 }
+
+/** CSS class for one day of uptime: the same four states everywhere a strip is drawn. */
+export function dayClass(p: number | null): string {
+  if (p === null) return "day-none";
+  if (p >= 99.9) return "day-ok";
+  if (p >= 99) return "day-warn";
+  return "day-bad";
+}
