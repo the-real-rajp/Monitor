@@ -64,8 +64,7 @@ export default function Login() {
           </button>
         </form>
         <p className="muted small" style={{ margin: 0 }}>
-          No account yet? An admin creates users with <code>php bin/user.php create</code> on the
-          server.
+          No account yet? Ask whoever runs this site to add you.
         </p>
       </div>
     </div>

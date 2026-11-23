@@ -107,11 +107,13 @@ export default function RttChart({ history }: { history: History }) {
             const ctx = u.ctx;
             const top = u.bbox.top;
             const h = u.bbox.height;
+            const dpr = uPlot.pxRatio;
+            const tick = 10 * dpr;
             ctx.save();
             ctx.fillStyle = danger;
             for (const t of lossX) {
               const x = u.valToPos(t, "x", true);
-              ctx.fillRect(x - 1.5, top, 3, h);
+              ctx.fillRect(x - 1.5 * dpr, top + h - tick, 3 * dpr, tick);
             }
             ctx.restore();
           },

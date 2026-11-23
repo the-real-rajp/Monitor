@@ -1,4 +1,4 @@
-/** A 60-point sparkline. Nulls (timeouts) are drawn as red ticks; gaps as nothing. */
+/** A 60-point sparkline. Nulls (timeouts) are drawn as red ticks along the bottom; gaps as nothing. */
 export default function Sparkline({
   points,
   width = 120,
@@ -51,15 +51,7 @@ export default function Sparkline({
       <path d={d} fill="none" stroke="var(--accent)" strokeWidth="2" strokeLinejoin="round" />
       {points.map((p, i) =>
         p === null ? (
-          <rect
-            key={i}
-            x={i * step - 1.5}
-            y={3}
-            width={3}
-            height={height - 6}
-            rx={1.5}
-            fill="var(--danger)"
-          />
+          <rect key={i} x={i * step - 1} y={height - 5} width={2} height={5} fill="var(--danger)" />
         ) : null,
       )}
     </svg>

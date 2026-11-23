@@ -1,13 +1,13 @@
 /* eslint-disable react-refresh/only-export-components -- hooks live beside the provider */
 import { createContext, useContext, useState, type ReactNode } from "react";
 import { useAuth } from "./auth";
+import { fmtDuration } from "./format";
 
 /** Auto-refresh choices in seconds; 0 is off. Mirrors Settings::REFRESH_CHOICES. */
 export const REFRESH_CHOICES = [0, 10, 30, 60, 300] as const;
 
 export function refreshLabel(seconds: number): string {
-  if (seconds === 0) return "off";
-  return seconds < 60 ? `${seconds} s` : `${seconds / 60} min`;
+  return seconds === 0 ? "off" : fmtDuration(seconds);
 }
 
 /** "default" follows the site-wide setting; a number is this browser's own choice. */

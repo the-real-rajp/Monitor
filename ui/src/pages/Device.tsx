@@ -55,9 +55,9 @@ export default function DevicePage() {
   const method =
     d.source === "web"
       ? s.last_method === "tcp"
-        ? `method: TCP connect to ${d.tcp_fallback_port ?? "?"}`
+        ? `TCP connect to ${d.tcp_fallback_port ?? "?"}`
         : s.last_method === "icmp"
-          ? "method: ICMP"
+          ? "ICMP"
           : d.tcp_fallback_port
             ? `TCP ${d.tcp_fallback_port} if ICMP is blocked`
             : "ICMP only"
@@ -178,7 +178,7 @@ export default function DevicePage() {
             </span>
           )}
           <span>
-            <i className="swatch" style={{ background: "var(--danger)", width: 4 }} /> timeout
+            <i className="swatch" style={{ background: "var(--danger)", width: 3 }} /> timeout
           </span>
         </div>
       </section>

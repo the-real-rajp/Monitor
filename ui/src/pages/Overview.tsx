@@ -23,56 +23,77 @@ export default function Overview() {
   const down = all.filter((d) => d.state === "down");
   const offlineAgents = o.agents.filter((a) => !a.online);
   const hasWeb = all.some((d) => d.source === "web");
+  const { devices: total, unknown } = o.summary;
+  const headline =
+    total === 0
+      ? { tone: "", dot: "", text: "Nothing is being monitored yet" }
+      : down.length > 0
+        ? {
+            tone: "danger",
+            dot: "down",
+            text:
+              down.length === 1
+                ? `${down[0]!.name} is down`
+                : `${down.length} of ${total} devices are down`,
+          }
+        : unknown > 0
+          ? {
+              tone: "",
+              dot: "unknown",
+              text: `Nothing is down, but ${unknown} device${unknown === 1 ? " has" : "s have"} no data`,
+            }
+          : {
+              tone: "ok",
+              dot: "up",
+              text: total === 1 ? "The one device is up" : `All ${total} devices are up`,
+            };
+  const checks = [
+    ...o.agents.map((a) => ({ name: a.name, at: a.last_seen_at, stale: !a.online })),
+    ...(hasWeb
+      ? [{ name: "Website", at: o.web_pinger.last_run_at, stale: !!o.web_pinger.last_error }]
+      : []),
+  ];
 
   return (
     <>
-      <section className="stat-grid" aria-label="Summary">
-        <div className="stat">
-          <div className="label">Devices</div>
-          <div className="value">{o.summary.devices}</div>
-          <div className="sub">
-            {all.filter((d) => d.source === "agent").length} on proxies ·{" "}
-            {all.filter((d) => d.source === "web").length} from the website
+      <section className={`status ${headline.tone}`} aria-label="Summary">
+        <h1 className="status-line">
+          <span className={`dot ${headline.dot}`} />
+          {headline.text}
+        </h1>
+        <dl className="facts">
+          <div>
+            <dt>Up</dt>
+            <dd>
+              {o.summary.up} of {o.summary.devices}
+            </dd>
           </div>
-        </div>
-        <div className="stat">
-          <div className="label">Up right now</div>
-          <div className="value ok-ink">{o.summary.up}</div>
-          <div className="sub">
-            {o.summary.down > 0 ? (
-              <span className="danger-ink" style={{ fontWeight: 600 }}>
-                {o.summary.down} down
-              </span>
-            ) : (
-              "nothing down"
-            )}
-            {o.summary.unknown > 0 && ` · ${o.summary.unknown} unknown`}
+          {o.summary.unknown > 0 && (
+            <div>
+              <dt>No data</dt>
+              <dd>{o.summary.unknown}</dd>
+            </div>
+          )}
+          <div>
+            <dt>30-day uptime</dt>
+            <dd>{fmtPct(o.summary.uptime_30d)}</dd>
           </div>
-        </div>
-        <div className="stat">
-          <div className="label">30-day uptime</div>
-          <div className="value">{fmtPct(o.summary.uptime_30d)}</div>
-          <div className="sub">
-            {o.summary.outages_30d} outage{o.summary.outages_30d === 1 ? "" : "s"}
-            {o.summary.longest_outage_30d_s !== null &&
-              `, longest ${fmtDuration(o.summary.longest_outage_30d_s)}`}
+          <div>
+            <dt>Outages in 30 days</dt>
+            <dd>
+              {o.summary.outages_30d}
+              {o.summary.longest_outage_30d_s !== null && (
+                <span className="aside">longest {fmtDuration(o.summary.longest_outage_30d_s)}</span>
+              )}
+            </dd>
           </div>
-        </div>
-        <div className="stat">
-          <div className="label">Last checks</div>
-          <div className="value" style={{ fontSize: 22 }}>
-            {o.agents[0]
-              ? fmtAgo(o.agents[0].last_seen_at)
-              : hasWeb
-                ? fmtAgo(o.web_pinger.last_run_at)
-                : "—"}
-          </div>
-          <div className="sub">
-            {o.agents.map((a) => `${a.name} ${fmtAgo(a.last_seen_at)}`).join(" · ")}
-            {hasWeb &&
-              `${o.agents.length ? " · " : ""}website cron ${fmtAgo(o.web_pinger.last_run_at)}`}
-          </div>
-        </div>
+          {checks.map((c) => (
+            <div key={c.name}>
+              <dt>{c.name} checked</dt>
+              <dd className={c.stale ? "danger-ink" : undefined}>{fmtAgo(c.at)}</dd>
+            </div>
+          ))}
+        </dl>
       </section>
 
       {offlineAgents.map((a) => (
@@ -167,14 +188,15 @@ function groupNote(devices: OverviewDevice[]): string {
 }
 
 function Tile({ d, group }: { d: OverviewDevice; group?: string }) {
+  // Only the exceptions get a badge; a plain ICMP reply is the normal case.
   const badge =
     d.state === "down"
       ? `down ${fmtFor(d.since)}`
       : d.state === "unknown"
         ? "no data"
         : d.last_method === "tcp"
-          ? "tcp"
-          : "icmp";
+          ? "TCP"
+          : null;
   return (
     <Link to={`/devices/${d.id}`} className={`tile ${d.state}`}>
       <div className="head">
@@ -188,7 +210,9 @@ function Tile({ d, group }: { d: OverviewDevice; group?: string }) {
             {group && ` · ${group}`}
           </div>
         </div>
-        <span className={`pill soft ${d.state === "down" ? "danger" : ""}`}>{badge}</span>
+        {badge && (
+          <span className={`pill soft ${d.state === "down" ? "danger" : ""}`}>{badge}</span>
+        )}
       </div>
       <div className="foot">
         <div>
