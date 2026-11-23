@@ -6,7 +6,7 @@
 # Point the subdomain's document root at $DEPLOYPATH/public.
 deployment:
   tasks:
-    - export DEPLOYPATH=/home/CPANEL_USER/monitor
+    - export DEPLOYPATH=/home/myownrea/monitor
     - /bin/mkdir -p $DEPLOYPATH/storage
     - /bin/rm -rf $DEPLOYPATH/public/assets
     - /bin/cp -R web/. $DEPLOYPATH/
