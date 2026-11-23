@@ -103,7 +103,10 @@ final class ApiTest extends TestCase
 
         $r = $this->request('GET', '/api/agent/devices', null, ['authorization' => 'Bearer garbage']);
         $this->assertSame(401, $r->status);
-        $r = $this->request('GET', '/api/agent/devices', null, ['authorization' => 'Bearer ' . substr($agent['key'], 0, -1) . 'f']);
+        // Change the last character to a different one. A fixed replacement would
+        // leave the key intact whenever it already ends in that character.
+        $tampered = substr($agent['key'], 0, -1) . (str_ends_with($agent['key'], 'f') ? '0' : 'f');
+        $r = $this->request('GET', '/api/agent/devices', null, ['authorization' => 'Bearer ' . $tampered]);
         $this->assertSame(401, $r->status, 'tampered key');
 
         $r = $this->request('GET', '/api/agent/devices', null, $auth);
