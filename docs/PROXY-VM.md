@@ -44,16 +44,34 @@ and checked against Ubuntu's published checksum), put it on the platform,
 create the VM with the first-boot file and power it on. Run them from any
 Windows, macOS or Linux computer that can reach Prism Central or vCenter.
 
-**Nutanix AHV, through Prism Central:**
+**Nutanix AHV, through Prism Central.** Run it with no arguments from the
+folder that holds the first-boot file:
 
 ```powershell
-./New-MonitorProxyVM-AHV.ps1 -PrismCentral pc.example.com -UserDataPath ./office-user-data.yaml -Subnet VLAN20 -SkipCertificateCheck
+./New-MonitorProxyVM-AHV.ps1
 ```
 
-Add `-Cluster NAME` when Prism Central manages several clusters. The image is
-uploaded once and reused for later proxies. `-PrismDownloadsImage` makes Prism
-Central fetch the image itself instead, which is quicker when the cluster has
-internet access.
+It asks for the Prism Central address and login, then offers numbered choices
+read from Prism Central: the first-boot file, cluster, storage container,
+subnet, automatic or fixed IP address, VM name and size, and how the Ubuntu
+image gets there. It shows a summary and asks before creating anything. The
+image is added once and reused for later proxies.
+
+Prism only clones an image-backed disk into the image's own container
+(`SelfServiceContainer` for images added through Prism Central). When you pick
+a different container, the script creates the VM and then moves its disks
+there; if the move is refused it prints the `acli` command that does it.
+
+A fixed address on a subnet with Nutanix IP management is reserved on the NIC.
+On a subnet without it, the script asks for the address, prefix, gateway and
+DNS servers and writes them into the VM.
+
+Every answer can also be given as a parameter, which skips that question; with
+all of them and `-Yes` it runs unattended:
+
+```powershell
+./New-MonitorProxyVM-AHV.ps1 -PrismCentral pc.example.com -UserDataPath ./office-user-data.yaml -Cluster PROD-01 -StorageContainer default -Subnet VLAN20 -IPAddress dhcp -Cpu 1 -MemoryGB 1 -DiskGB 10 -ImageSource upload -Yes
+```
 
 **VMware, through vCenter** (needs PowerCLI: `Install-Module VMware.PowerCLI -Scope CurrentUser`, or pass `-InstallPowerCLI`):
 
@@ -64,11 +82,11 @@ internet access.
 Use `-VMHost` instead of `-Cluster` to pick a host, and `-Folder` for a VM
 folder.
 
-Both prompt for the login, default to 1 vCPU, 1 GB and a 10 GB disk
-(`-Cpu`, `-MemoryGB`, `-DiskGB`), name the VM after the hostname in the
-first-boot file (`-VMName` overrides), and support `-WhatIf`. Drop
-`-SkipCertificateCheck` if Prism Central or vCenter has a trusted
-certificate. `Get-Help ./New-MonitorProxyVM-AHV.ps1 -Full` lists every option.
+The VMware script takes its answers as parameters, prompts for the login,
+defaults to 1 vCPU, 1 GB and a 10 GB disk (`-Cpu`, `-MemoryGB`, `-DiskGB`),
+names the VM after the hostname in the first-boot file (`-VMName` overrides)
+and supports `-WhatIf`. `Get-Help ./New-MonitorProxyVM-VMware.ps1 -Full` lists
+every option.
 
 Then skip to **Check it**. The manual steps below do the same by hand.
 

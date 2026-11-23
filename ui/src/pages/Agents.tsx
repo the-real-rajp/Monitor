@@ -74,8 +74,8 @@ function VmSetup({ name, userData }: { name: string; userData: string }) {
         </span>
         <VmScripts />
         <pre className="code">
-          {`# Nutanix AHV, through Prism Central
-./${VM_SCRIPTS.ahv} -PrismCentral PC-ADDRESS -UserDataPath ./${fileName} -Subnet SUBNET-NAME -SkipCertificateCheck
+          {`# Nutanix AHV, through Prism Central. It asks for everything with numbered choices.
+./${VM_SCRIPTS.ahv}
 
 # VMware, through vCenter
 ./${VM_SCRIPTS.vmware} -VCenter VCENTER-ADDRESS -UserDataPath ./${fileName} -Cluster CLUSTER -Datastore DATASTORE -Network "PORT-GROUP" -InstallPowerCLI -SkipCertificateCheck`}
