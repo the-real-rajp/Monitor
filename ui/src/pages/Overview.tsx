@@ -4,11 +4,12 @@ import { api, type Overview as OverviewData, type OverviewDevice } from "../api/
 import Sparkline from "../components/Sparkline";
 import { fmtAgo, fmtDuration, fmtFor, fmtPct, fmtRtt } from "../lib/format";
 import { useAuth } from "../lib/auth";
-import { useRefresh } from "../lib/refresh";
+import { refreshLabel, useRefresh } from "../lib/refresh";
 
 export default function Overview() {
   const { me } = useAuth();
-  const { ms } = useRefresh();
+  const { ms, choice, siteDefault } = useRefresh();
+  const refreshS = choice === "default" ? siteDefault : choice;
   const q = useQuery({
     queryKey: ["overview"],
     queryFn: () => api.get<OverviewData>("/api/overview"),
@@ -112,31 +113,48 @@ export default function Overview() {
           </h2>
           <div className="tiles">
             {down.map((d) => (
-              <Tile key={d.id} d={d} />
+              <Tile key={d.id} d={d} group={o.groups.find((g) => g.devices.includes(d))?.name} />
             ))}
           </div>
         </section>
       )}
 
-      {o.groups.map((g) => (
-        <section key={g.id ?? "none"} className="col">
-          <h2 className="section-title">
-            {g.name}
-            <span className="note">{groupNote(g.devices)}</span>
-          </h2>
-          <div className="tiles">
-            {g.devices.map((d) => (
-              <Tile key={d.id} d={d} />
-            ))}
-          </div>
-        </section>
-      ))}
+      {o.groups.map((g) => {
+        // Down devices are already listed under "Down"; each device has one tile.
+        const rest = g.devices.filter((d) => d.state !== "down");
+        const nDown = g.devices.length - rest.length;
+        return (
+          <section key={g.id ?? "none"} className="col">
+            <h2 className="section-title">
+              {g.name}
+              <span className="note">
+                {groupNote(g.devices)}
+                {nDown > 0 && ` · ${nDown} down, listed above`}
+              </span>
+            </h2>
+            {rest.length > 0 && (
+              <div className="tiles">
+                {rest.map((d) => (
+                  <Tile key={d.id} d={d} />
+                ))}
+              </div>
+            )}
+          </section>
+        );
+      })}
 
       <p className="small faint" style={{ margin: 0 }}>
-        Refreshes every 10 seconds · raw results kept 7 days, hourly history 13 months
+        {refreshS > 0 ? `Refreshes every ${refreshLabel(refreshS)}` : "Auto-refresh is off"}
+        {o.retention &&
+          ` · individual pings kept ${fmtDays(o.retention.raw_days)}, hourly history ${fmtDays(o.retention.hourly_days)}`}
       </p>
     </>
   );
+}
+
+function fmtDays(days: number): string {
+  if (days >= 60) return `${Math.round(days / 30.44)} months`;
+  return `${days} day${days === 1 ? "" : "s"}`;
 }
 
 function groupNote(devices: OverviewDevice[]): string {
@@ -148,7 +166,7 @@ function groupNote(devices: OverviewDevice[]): string {
   return [...srcs].join(", ") + every;
 }
 
-function Tile({ d }: { d: OverviewDevice }) {
+function Tile({ d, group }: { d: OverviewDevice; group?: string }) {
   const badge =
     d.state === "down"
       ? `down ${fmtFor(d.since)}`
@@ -165,7 +183,10 @@ function Tile({ d }: { d: OverviewDevice }) {
             <span className={`dot ${d.state}`} />
             {d.name}
           </div>
-          <div className="host">{d.host}</div>
+          <div className="host">
+            {d.host}
+            {group && ` · ${group}`}
+          </div>
         </div>
         <span className={`pill soft ${d.state === "down" ? "danger" : ""}`}>{badge}</span>
       </div>

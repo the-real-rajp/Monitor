@@ -125,6 +125,10 @@ final class OverviewHandlers
                 'last_run_at' => Clock::iso($cron['started_at'] ?? null),
                 'last_error'  => $cron['error'] ?? null,
             ],
+            'retention' => [
+                'raw_days'    => $this->app->settings->rawRetentionDays(),
+                'hourly_days' => $this->app->settings->hourlyRetentionDays(),
+            ],
             'groups' => array_values($groups),
         ]);
     }

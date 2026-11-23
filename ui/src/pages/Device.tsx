@@ -199,20 +199,20 @@ export default function DevicePage() {
           </div>
         ) : (
           <div className="scroll-x">
-            <table style={{ minWidth: 560 }}>
+            <table>
               <thead>
                 <tr>
                   <th>Started</th>
-                  <th>Ended</th>
+                  <th className="hide-sm">Ended</th>
                   <th>Duration</th>
-                  <th>Detected by</th>
+                  <th className="hide-sm">Detected by</th>
                 </tr>
               </thead>
               <tbody>
                 {events.data?.events.map((e) => (
                   <tr key={e.id}>
                     <td className="mono small">{fmtDateTime(e.started_at)}</td>
-                    <td className="mono small">
+                    <td className="mono small hide-sm">
                       {e.ongoing ? (
                         <span className="danger-ink">ongoing</span>
                       ) : (
@@ -221,8 +221,9 @@ export default function DevicePage() {
                     </td>
                     <td style={{ fontWeight: 600 }}>
                       {e.ongoing ? fmtFor(e.started_at) : fmtDuration(e.duration_s)}
+                      {e.ongoing && <span className="danger-ink only-sm"> · ongoing</span>}
                     </td>
-                    <td className="muted">{e.detected_by}</td>
+                    <td className="muted hide-sm">{e.detected_by}</td>
                   </tr>
                 ))}
               </tbody>

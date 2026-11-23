@@ -59,7 +59,7 @@ export default function Layout() {
           )}
         </nav>
         <div className="spacer" />
-        <div className="row" style={{ gap: 8 }}>
+        <div className="row topbar-tools">
           <select
             className="refresh-select"
             aria-label="Auto-refresh"
@@ -93,7 +93,7 @@ export default function Layout() {
             {initials}
           </Link>
           <button
-            className="btn sm"
+            className="btn sm hide-sm"
             onClick={async () => {
               await logout();
               nav("/login");

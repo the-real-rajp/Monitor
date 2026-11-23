@@ -220,7 +220,7 @@ export default function Agents() {
 
       <section
         className="tiles"
-        style={{ gridTemplateColumns: "repeat(auto-fill, minmax(380px, 1fr))" }}
+        style={{ gridTemplateColumns: "repeat(auto-fill, minmax(min(380px, 100%), 1fr))" }}
       >
         {active.map((a) => (
           <article key={a.id} className="card col" style={{ gap: 14 }}>
