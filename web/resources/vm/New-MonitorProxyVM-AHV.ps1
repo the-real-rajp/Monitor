@@ -80,7 +80,6 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$ProgressPreference = 'SilentlyContinue'   # Invoke-WebRequest is far faster without the progress bar
 
 # --- Asking questions ------------------------------------------------------
 
@@ -184,12 +183,21 @@ function Get-PrismList([string] $Kind, [string] $Filter) {
     $all
 }
 
-function Wait-PrismTask([string] $TaskUuid, [string] $What, [int] $TimeoutMinutes = 30) {
+function Wait-PrismTask([string] $TaskUuid, [string] $What, [int] $TimeoutMinutes = 30, [string] $ProgressActivity) {
+    # With -ProgressActivity it shows a progress bar from the task's own percentage.
     $deadline = (Get-Date).AddMinutes($TimeoutMinutes)
     while ($true) {
         $t = Invoke-Prism GET "tasks/$TaskUuid"
+        if ($ProgressActivity) {
+            $percent = [int] (Get-Prop $t 'percentage_complete')
+            if ($t.status -ne 'SUCCEEDED') {
+                Write-Progress -Activity $ProgressActivity -Status "$percent% complete" -PercentComplete ([Math]::Min(100, [Math]::Max(0, $percent)))
+            }
+            else { Write-Progress -Activity $ProgressActivity -Completed }
+        }
         if ($t.status -eq 'SUCCEEDED') { return }
         if ($t.status -in 'FAILED', 'ABORTED') {
+            if ($ProgressActivity) { Write-Progress -Activity $ProgressActivity -Completed }
             $why = Get-Prop $t 'error_detail'
             if (-not $why) { $why = $t | ConvertTo-Json -Depth 6 -Compress }
             throw "$What failed: $why"
@@ -291,9 +299,95 @@ function Add-StaticNetwork([string] $UserData, [string] $Cidr, [string] $Gateway
     $out -join "`n"
 }
 
+function Show-TransferProgress([string] $Activity, [long] $Done, [long] $Total, [datetime] $Started) {
+    $seconds = [Math]::Max(((Get-Date) - $Started).TotalSeconds, 0.001)
+    $rate = $Done / $seconds
+    if ($Total -gt 0) {
+        $status = '{0:N0} MB of {1:N0} MB  ({2:N1} MB/s)' -f ($Done / 1MB), ($Total / 1MB), ($rate / 1MB)
+        $percent = [int] [Math]::Min(100, [Math]::Floor(100 * $Done / $Total))
+        $remaining = if ($rate -gt 0) { [int] (($Total - $Done) / $rate) } else { -1 }
+        Write-Progress -Activity $Activity -Status $status -PercentComplete $percent -SecondsRemaining $remaining
+    }
+    else {
+        Write-Progress -Activity $Activity -Status ('{0:N0} MB  ({1:N1} MB/s)' -f ($Done / 1MB), ($rate / 1MB))
+    }
+}
+
+function Save-UrlWithProgress([string] $Url, [string] $OutFile, [string] $Activity) {
+    # Downloads a large file with a progress bar.
+    $client = [System.Net.Http.HttpClient]::new()
+    $client.Timeout = [System.Threading.Timeout]::InfiniteTimeSpan
+    try {
+        $response = $client.GetAsync($Url, [System.Net.Http.HttpCompletionOption]::ResponseHeadersRead).GetAwaiter().GetResult()
+        [void] $response.EnsureSuccessStatusCode()
+        $total = [long] ($response.Content.Headers.ContentLength ?? 0)
+        $source = $response.Content.ReadAsStreamAsync().GetAwaiter().GetResult()
+        $target = [System.IO.File]::Create($OutFile)
+        try {
+            $buffer = [byte[]]::new(1MB)
+            $done = [long] 0
+            $started = Get-Date
+            $shown = $started
+            while (($read = $source.Read($buffer, 0, $buffer.Length)) -gt 0) {
+                $target.Write($buffer, 0, $read)
+                $done += $read
+                if (((Get-Date) - $shown).TotalMilliseconds -ge 500) {
+                    Show-TransferProgress $Activity $done $total $started
+                    $shown = Get-Date
+                }
+            }
+        }
+        finally { $target.Dispose(); $source.Dispose() }
+    }
+    finally {
+        $client.Dispose()
+        Write-Progress -Activity $Activity -Completed
+    }
+}
+
+function Send-FileWithProgress([string] $Uri, [string] $Path, [string] $Activity) {
+    # Uploads a large file to Prism Central with a progress bar.
+    $handler = [System.Net.Http.HttpClientHandler]::new()
+    if (-not $VerifyCertificate) {
+        $handler.ServerCertificateCustomValidationCallback = [System.Net.Http.HttpClientHandler]::DangerousAcceptAnyServerCertificateValidator
+    }
+    $client = [System.Net.Http.HttpClient]::new($handler)
+    $client.Timeout = [System.Threading.Timeout]::InfiniteTimeSpan
+    $login = "$($Credential.UserName):$($Credential.GetNetworkCredential().Password)"
+    $client.DefaultRequestHeaders.Authorization = [System.Net.Http.Headers.AuthenticationHeaderValue]::new(
+        'Basic', [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($login)))
+    $stream = [System.IO.File]::OpenRead($Path)
+    try {
+        $total = $stream.Length
+        $content = [System.Net.Http.StreamContent]::new($stream, 1MB)
+        $content.Headers.ContentType = [System.Net.Http.Headers.MediaTypeHeaderValue]::new('application/octet-stream')
+        $started = Get-Date
+        $upload = $client.PutAsync($Uri, $content)
+        while (-not $upload.IsCompleted) {
+            $sent = [long] 0
+            try { $sent = $stream.Position } catch { $sent = $total }   # the stream is closed once it has all been sent
+            if ($sent -ge $total) {
+                Write-Progress -Activity $Activity -Status 'All sent. Waiting for Prism Central to store it ...' -PercentComplete 100
+            }
+            else { Show-TransferProgress $Activity $sent $total $started }
+            Start-Sleep -Milliseconds 500
+        }
+        $response = $upload.GetAwaiter().GetResult()
+        if (-not $response.IsSuccessStatusCode) {
+            $detail = $response.Content.ReadAsStringAsync().GetAwaiter().GetResult()
+            throw "Uploading the image failed: $([int] $response.StatusCode) $($response.ReasonPhrase) $detail"
+        }
+    }
+    finally {
+        Write-Progress -Activity $Activity -Completed
+        $stream.Dispose()
+        $client.Dispose()
+    }
+}
+
 function Get-UbuntuImage([string] $Url, [string] $Dir) {
     # Downloads the image once and checks it against Ubuntu's published SHA-256.
-    New-Item -ItemType Directory -Force -Path $Dir | Out-Null
+    $Dir = (New-Item -ItemType Directory -Force -Path $Dir).FullName   # absolute, for the .NET file calls
     $name = Split-Path $Url -Leaf
     $file = Join-Path $Dir $name
     $sums = (Invoke-WebRequest -Uri (($Url -replace '[^/]+$', '') + 'SHA256SUMS')).Content
@@ -308,7 +402,8 @@ function Get-UbuntuImage([string] $Url, [string] $Dir) {
         return $file
     }
     Write-Info "Downloading $name (about 600 MB) to $Dir ..."
-    Invoke-WebRequest -Uri $Url -OutFile "$file.part"
+    Save-UrlWithProgress $Url "$file.part" "Downloading $name"
+    Write-Info "Checking the download against Ubuntu's published checksum ..."
     if ((Get-FileHash "$file.part" -Algorithm SHA256).Hash -ine $expected) {
         Remove-Item "$file.part" -Force
         throw 'The downloaded image does not match the published checksum. Run again to retry.'
@@ -566,17 +661,27 @@ else {
         spec        = @{ name = $ImageName; description = "Ubuntu Server cloud image for Monitor proxies ($ImageUrl)"; resources = $resources }
     }
     $imageUuid = $created.metadata.uuid
-    Wait-PrismTask (Get-TaskUuid $created) 'Creating the image'
-    if ($ImageSource -eq 'prism') { Write-Info 'Prism Central is downloading the image ...' }
-    else {
-        Write-Info 'Uploading the image to Prism Central (this can take several minutes) ...'
-        Invoke-Prism PUT "images/$imageUuid/file" -InFile $localImage | Out-Null
+    if ($ImageSource -eq 'prism') {
+        Write-Info 'Prism Central is downloading the image ...'
+        Wait-PrismTask (Get-TaskUuid $created) 'Downloading the image' 60 'Prism Central is downloading the Ubuntu image'
     }
-    $deadline = (Get-Date).AddMinutes(30)
+    else {
+        Wait-PrismTask (Get-TaskUuid $created) 'Creating the image'
+        Write-Info 'Uploading the image to Prism Central ...'
+        Send-FileWithProgress "https://${PrismCentral}:9440/api/nutanix/v3/images/$imageUuid/file" $localImage 'Uploading the Ubuntu image to Prism Central'
+    }
+    $processing = 'Prism Central is processing the image'
+    $started = Get-Date
+    $deadline = $started.AddMinutes(30)
     while ((Get-Prop (Invoke-Prism GET "images/$imageUuid").status 'state') -ne 'COMPLETE') {
-        if ((Get-Date) -gt $deadline) { throw "Image '$ImageName' was not ready after 30 minutes. Check the tasks in Prism Central." }
+        if ((Get-Date) -gt $deadline) {
+            Write-Progress -Activity $processing -Completed
+            throw "Image '$ImageName' was not ready after 30 minutes. Check the tasks in Prism Central."
+        }
+        Write-Progress -Activity $processing -Status ('{0:N0} seconds so far' -f ((Get-Date) - $started).TotalSeconds)
         Start-Sleep -Seconds 5
     }
+    Write-Progress -Activity $processing -Completed
     Write-Info 'Image is ready.'
 }
 
