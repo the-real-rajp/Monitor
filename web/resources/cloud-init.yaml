@@ -1,0 +1,51 @@
+#cloud-config
+# Monitor proxy VM: first-boot configuration (cloud-init user data).
+#
+# Use it with a stock Ubuntu Server cloud image. On Nutanix AHV paste it as the
+# cloud-init custom script; on VMware vSphere base64-encode it into the OVA's
+# "Encoded user-data" field. On first boot the VM installs the proxy and starts
+# reporting to __BASE_URL__. See docs/PROXY-VM.md in the repository.
+#
+# This file contains the proxy's key. Treat it like a password.
+
+hostname: __HOSTNAME__
+
+# Optional: a way to log in for troubleshooting. The proxy does not need one.
+# Uncomment and fill in either or both; the user name is "ubuntu".
+#ssh_authorized_keys:
+#  - ssh-ed25519 AAAA... you@laptop
+#password: choose-a-console-password
+#chpasswd: { expire: false }
+
+write_files:
+  - path: /usr/local/sbin/monitor-proxy-setup
+    owner: root:root
+    permissions: "0700"
+    content: |
+      #!/bin/sh
+      # Installs the Monitor proxy. Retries for up to 30 minutes because the
+      # network is not always up when cloud-init gets here. Safe to re-run.
+      URL='__BASE_URL__'
+      KEY='__KEY__'
+      SCRIPT=/run/monitor-install.sh
+      n=0
+      while [ "$n" -lt 60 ]; do
+        n=$((n + 1))
+        if command -v curl >/dev/null 2>&1; then
+          curl -fsSL -o "$SCRIPT" "$URL/install.sh"
+        else
+          wget -qO "$SCRIPT" "$URL/install.sh"
+        fi
+        if [ -s "$SCRIPT" ] && sh "$SCRIPT" --url "$URL" --key "$KEY"; then
+          rm -f "$SCRIPT"
+          echo "monitor proxy installed"
+          exit 0
+        fi
+        echo "monitor proxy setup: attempt $n failed, retrying in 30s"
+        sleep 30
+      done
+      echo "monitor proxy setup: gave up; run /usr/local/sbin/monitor-proxy-setup again" >&2
+      exit 1
+
+runcmd:
+  - [/usr/local/sbin/monitor-proxy-setup]

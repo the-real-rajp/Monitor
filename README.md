@@ -7,6 +7,7 @@ dashboard from its MySQL database.
 
 - `docs/PLAN.md`: what we are building, architecture, data model, phases, progress.
 - `docs/DEPLOY.md`: putting it on a cPanel account, step by step.
+- `docs/PROXY-VM.md`: running the proxy as a VM on Nutanix AHV or VMware.
 - `docs/DEVELOPMENT.md`: running and testing the three parts locally.
 - `docs/adr/`: decisions with lasting consequences.
 
