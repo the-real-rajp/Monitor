@@ -1,7 +1,7 @@
 # Monitor: System Plan
 
 Status: v2, replaces the multi-signal plan of 2026-10-14
-Date: 2026-10-24
+Date: 2026-10-24; roadmap (section 8) revised 2026-11-23
 
 ## 1. What we are building
 
@@ -26,11 +26,18 @@ and how has it behaved over the last 30 days.
 | cPanel cron granularity is one minute | The minimum ping interval for website-side checks is 60 seconds. The proxy can ping as often as every 10 seconds. |
 | One MySQL database, no columnar store | Raw results are kept for 7 days; an hourly rollup table carries the 30-day (and longer) history. Fifty devices every minute is about two million raw rows a month, well within MySQL's comfort zone. |
 
-### Out of scope for v1
+### Scope
 
-HTTP, DNS and TLS checks, server metrics, logs, traces, multi-tenancy, on-call
-schedules. The earlier plan's phases 2 to 4 are shelved, not deleted; if the
-product grows, that document is in git history.
+Phase 1 is pings only. The roadmap in section 8 grows the system in stages:
+service checks (TCP, HTTP, DNS, TLS), network device health over SNMP,
+internet link quality, and server metrics. Each arrives as its own phase on
+the same website, database and proxy.
+
+Out of scope throughout: logs, traces, multi-tenancy and on-call schedules.
+Logs and traces produce more data than a shared MySQL database handles well.
+The earlier multi-signal plan that covered them is shelved, not deleted; that
+document is in git history, and its phase numbers (still cited in ADR 001 and
+ADR 002) are unrelated to the phases here.
 
 ## 2. Architecture
 
@@ -63,7 +70,7 @@ product grows, that document is in git history.
    - Serves the built React dashboard as static files.
    - Runs `bin/cron.php` once a minute from cPanel cron: pings website-side
      devices, updates status, computes hourly rollups, prunes old rows,
-     sends alert emails (phase 2). A lock file prevents overlapping runs, and
+     sends alert emails (phase 3). A lock file prevents overlapping runs, and
      the whole run is budgeted to finish in under 40 seconds.
 
 2. **On-prem proxy: `monitor-agent`** (`cmd/agent`, Go). One static binary for
@@ -109,7 +116,7 @@ shared plan.
 Status logic lives in one PHP function used by both ingest paths: a device
 becomes `down` after N consecutive timeouts and `up` on the first success.
 Each transition writes an `events` row. The same function will trigger alerts
-in phase 2.
+in phase 3.
 
 ## 4. API
 
@@ -193,10 +200,22 @@ docs/
 
 ## 8. Delivery
 
-Each step leaves something that works end to end. Estimates assume one to
-two people.
+Each phase leaves something that works end to end. Estimates assume one to
+two people. Phases 2 to 5 round out the ping monitor; phases 6 to 8 widen
+what is monitored.
 
-### Phase 1: pings and the dashboard (3 to 4 weeks)
+| Phase | Theme | Estimate | Status |
+|---|---|---|---|
+| 1 | Pings and the dashboard | 3 to 4 weeks | Built |
+| 2 | Go live | 1 week | Next |
+| 3 | Alerting | 2 weeks | Not started |
+| 4 | Accounts and security | 1 to 2 weeks | Not started |
+| 5 | Reporting | 1 to 2 weeks | Not started |
+| 6 | Service checks | 2 to 3 weeks | Not started |
+| 7 | SNMP and link quality | 3 to 4 weeks | Not started |
+| 8 | Server metrics and more sites | 4 to 6 weeks | Not started |
+
+### Phase 1: pings and the dashboard (built)
 
 1. MySQL schema and migrations, PHP skeleton, auth, config, local compose stack.
 2. Agent API and the Go agent: device sync, ICMP pinger, batching, buffering,
@@ -205,25 +224,142 @@ two people.
    events; hourly rollup and pruning.
 4. Dashboard: overview, device page with the 30-day strip and RTT chart,
    devices, groups, agents, login.
-5. cPanel deployment: `.cpanel.yml`, deploy branch workflow, documented cron
-   line. First real install on your account.
+5. cPanel deployment files: `.cpanel.yml`, deploy branch workflow, documented
+   cron line.
 
-Exit: your Pi is pinging the office and your firewall is pinged from the
-website; the dashboard shows a month of history once a month has passed.
+Built since the original plan: user management for admins, a Settings page
+with configurable auto-refresh, suggested device groups, and scripts for
+running the proxy as a VM (`docs/PROXY-VM.md`).
 
-### Phase 2: alerting and polish (1 to 2 weeks)
+### Phase 2: go live (1 week)
 
-- Email on down and on recovery, with the threshold and a per-device mute.
-  PHP `mail()` on Bluehost, SMTP as an option.
-- Maintenance windows that suppress alerts and grey out the strip.
-- CSV export of a device's history; a printable monthly report.
+- First install on the Bluehost account, following `docs/DEPLOY.md`.
+- A tagged release, so `install.sh` has proxy binaries to download.
+- The first proxy installed on-prem and pinging real devices.
+- Nightly database backup: a `mysqldump` from cron to a directory outside the
+  document root, with a retention count, and a documented restore.
+- Watching the monitor itself. `/api/health` already reports the last cron
+  run; an external dead-man's-switch service calls it and emails when cron
+  has stopped or the database is unreachable. The dashboard shows a banner
+  when the last cron run is more than three minutes old.
+
+Exit: the Pi is pinging the office, the firewall is pinged from the website,
+a backup has been restored once as a test, and stopping cron produces an
+email. This phase also settles whether Bluehost allows `ping` and `mail()`,
+which phase 3 depends on.
+
+### Phase 3: alerting (2 weeks)
+
+- Email on down and on recovery, using the existing down threshold. PHP
+  `mail()` on Bluehost, SMTP as an option.
+- "Proxy offline" alert when a heartbeat is missed, sent once per proxy and
+  not once per device behind it.
+- Per-device mute.
+- Maintenance windows that suppress alerts and grey out the uptime strip.
+- Flap suppression: a device that changes state repeatedly within a window
+  sends one alert, then a summary.
+- A webhook channel, with ready-made formats for Slack and Teams.
+- An alert log in the dashboard: what was sent, to whom, and whether delivery
+  succeeded.
+
+Exit: unplugging a test device produces one email and one webhook message,
+and plugging it back in produces one recovery message.
+
+### Phase 4: accounts and security (1 to 2 weeks)
+
+User management already exists. This phase adds the rest.
+
+- Password reset by email (needs the mail path from phase 3).
+- Two-factor login with TOTP, optional per user, enforceable for admins.
+- Audit log of admin changes: devices, groups, users, settings, proxy keys.
+- Proxy key rotation without downtime: a new key is issued and the old one
+  stays valid for a grace period.
+- A session list on the Account page with "sign out everywhere else".
+
+Exit: an admin can recover a forgotten password without shell access, and
+every configuration change is attributable to a user.
+
+### Phase 5: reporting (1 to 2 weeks)
+
+- CSV export of a device's history and of the outage log.
+- A printable monthly report: uptime per device and group, outages, slowest
+  devices.
+- An uptime target per device or group, with the month-to-date figure shown
+  against it.
 - Optional public status page for a chosen subset of devices.
 
-### Phase 3: if wanted later
+Exit: the monthly report for the first full month in production can be
+printed or sent as it stands.
 
-- TCP and HTTP checks as first-class check types with the same history.
-- A second agent at another site, with per-site views.
-- Moving the website to a VPS if cron limits or `exec` restrictions bite.
+### Phase 6: service checks (2 to 3 weeks)
+
+The first step beyond ping. Each device can carry several checks, and every
+check has the same history, status and alerts as a ping.
+
+- Check types: TCP port open, HTTP or HTTPS (status code, response time,
+  optional body match), DNS (resolves, and optionally to an expected answer),
+  TLS certificate expiry, domain registration expiry.
+- Data model: a `checks` table under `devices`; results, rollups, status and
+  events keyed by check instead of by device. The existing ping becomes the
+  first check type, migrated in place.
+- Both the proxy and the website cron can run every type, so internal and
+  internet-facing services are covered the same way.
+- Expiry checks alert ahead of time (30, 14 and 3 days by default) instead of
+  on failure.
+- Device page: one row per check, with the device's overall state being its
+  worst check.
+
+Exit: an internal web application and the public website are both monitored
+for response time and certificate expiry, with alerts.
+
+### Phase 7: SNMP and link quality (3 to 4 weeks)
+
+Numeric measurements, not just up or down. Both parts share a new metrics
+store and threshold alerts.
+
+- Metrics store: a `metric_series` table (device, metric name, unit, labels
+  such as interface name) and `metric_points` with raw samples kept 7 days
+  and an hourly rollup (min, avg, max) kept 400 days, mirroring the ping
+  tables.
+- SNMP polling from the proxy, v2c and v3, with credentials stored on the
+  website and sent to the proxy over the existing API.
+- Built-in profiles so common devices work without configuration:
+  - Switches and firewalls: per-interface traffic, errors, discards, link
+    state.
+  - UPS: on battery, charge, runtime remaining, load.
+  - Printers: toner and paper levels, page count.
+  - NAS: volume usage, disk and array health, temperature.
+- Link quality from the proxy: packet loss and jitter to a set of reference
+  targets, and a scheduled speed test (hourly at most, off by default on
+  metered links).
+- Threshold alerts through the phase 3 channels, such as "toner below 10%",
+  "UPS on battery" and "packet loss above 5% for 10 minutes".
+- Dashboard: metric charts on the device page, an interface table for
+  switches, and an Internet page for link quality.
+
+Exit: the core switch shows per-port traffic, the UPS alerts when it goes on
+battery, and the Internet page shows a month of loss, jitter and speed.
+
+### Phase 8: server metrics and more sites (4 to 6 weeks)
+
+The largest step, because it puts software on the monitored machines.
+
+- A host mode for the agent, installed on each server: CPU, memory, disk
+  space and I/O, network, uptime, and the state of named services. It
+  reports into the phase 7 metrics store.
+- A Windows build of the agent, running as a Windows service, alongside the
+  existing Linux builds.
+- A server page in the dashboard, and threshold alerts such as "disk above
+  90%" and "service stopped".
+- Multiple sites: a second proxy at another location, devices and proxies
+  assigned to a site, per-site views and per-site alert recipients.
+- A decision point on hosting. Host metrics at a short interval from many
+  servers may exceed what shared hosting and one-minute cron can carry. If
+  measurements in production say so, the website moves to a VPS; the PHP
+  application and MySQL schema move unchanged.
+
+Exit: two sites, each with its own proxy, and the servers at both report
+disk, memory and service state with alerts.
 
 ## 9. Risks
 
@@ -232,9 +368,14 @@ website; the dashboard shows a month of history once a month has passed.
 | Bluehost disallows `exec` or ICMP, so website pings cannot use `ping` | Built-in TCP fallback, chosen per device; the UI shows the method. Detected on first cron run and shown on the health page. |
 | Cron overruns the minute | Website pings run in parallel with a hard 5-second timeout each; the job records its own duration and refuses to start if the previous run holds the lock. |
 | Website outage or Bluehost maintenance looks like an office outage | The agent buffers 24 hours and backfills with original timestamps. The status engine processes backfilled results in order. |
-| The Pi dies or loses power | Heartbeat-based "proxy offline" state on the overview, distinct from device down. Phase 2 emails about it. |
+| The Pi dies or loses power | Heartbeat-based "proxy offline" state on the overview, distinct from device down. Phase 3 emails about it. |
 | MySQL on shared hosting is slow for aggregate queries | The dashboard reads from `device_status`, `ping_hourly` and `events`; the raw table is only touched for 1h and 24h charts of a single device. |
 | Secrets in git | `config.php` is outside the document root and git-ignored; agent keys are hashed. |
+| The monitor fails silently (cron stops, database full) | Phase 2 adds an external dead-man's switch on `/api/health`, a stale-cron banner and nightly backups. |
+| Alert email from shared hosting lands in spam or is rate-limited | SMTP option in phase 3; webhook as a second channel; the alert log records delivery failures. |
+| Re-keying history from device to check (phase 6) corrupts existing data | The migration is additive: every device gets one ping check and existing rows are assigned to it. Tested against a copy of the production database before it runs there. |
+| SNMP and host metrics outgrow shared MySQL (phases 7 and 8) | Per-series sample intervals of one minute or more, the same 7-day raw and hourly rollup scheme, and a cap on series per device. Row counts are measured at the end of phase 7 before phase 8 starts. |
+| SNMP credentials stored on the website | Encrypted at rest with a key from `config.php`, sent only to the proxy that polls the device, never returned to the browser. Read-only communities and SNMPv3 recommended in the UI. |
 
 ## 10. Decisions taken
 
@@ -253,9 +394,11 @@ website; the dashboard shows a month of history once a month has passed.
   TCP fallback; the Go proxy with buffering, backfill and heartbeat; the React
   dashboard (overview, device page with 30-day strip and RTT chart, devices,
   proxies, account); install script, systemd unit, cPanel deploy branch
-  workflow, release workflow. 15 PHP integration tests and the Go suite pass;
-  the proxy was run end to end against the PHP site.
-- **Not yet done:** the first install on the Bluehost account (needs the
-  database credentials and cPanel steps in `docs/DEPLOY.md`), and a tagged
-  release so `install.sh` has binaries to download.
-- **Phase 2** (alerts, maintenance windows, exports) has not started.
+  workflow, release workflow. The proxy was run end to end against the PHP
+  site. User management, the Settings page and the proxy VM scripts were
+  added afterwards.
+- **2026-11-23: roadmap revised** from three phases to eight (section 8).
+- **Phase 2 (go live) is next:** the first install on the Bluehost account
+  (needs the database credentials and the cPanel steps in `docs/DEPLOY.md`),
+  and a tagged release so `install.sh` has binaries to download.
+- **Phases 3 to 8** have not started.

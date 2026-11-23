@@ -13,9 +13,12 @@ dashboard from its MySQL database.
 
 ## Status
 
-Phase 1 is built: website, proxy and dashboard work end to end locally. Next
-is the first deployment to the Bluehost account and a tagged release of the
-proxy. Phase 2 adds email alerts.
+Phase 1 of 8 is built: website, proxy and dashboard work end to end locally.
+Phase 2 is going live: the first deployment to the Bluehost account, a tagged
+release of the proxy, backups, and monitoring of the monitor itself. Later
+phases add alerting, account security, reporting, service checks (TCP, HTTP,
+DNS, TLS), SNMP and link quality, and server metrics. See `docs/PLAN.md`,
+section 8.
 
 ## Quick tour
 
