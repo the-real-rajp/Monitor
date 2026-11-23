@@ -34,7 +34,43 @@ If you want to be able to log in to the VM for troubleshooting, edit the
 file before using it and uncomment the `ssh_authorized_keys` or `password`
 lines near the top. The login user is `ubuntu`.
 
-## 2a. Nutanix AHV
+## 2. The quick way: a PowerShell script
+
+Two PowerShell 7 scripts in `deploy/vm/` do everything in section 3 for you:
+they download the Ubuntu cloud image (once; it is cached in `~/.monitor-proxy`
+and checked against Ubuntu's published checksum), put it on the platform,
+create the VM with the first-boot file and power it on. Run them from any
+Windows, macOS or Linux computer that can reach Prism Central or vCenter.
+
+**Nutanix AHV, through Prism Central:**
+
+```powershell
+./New-MonitorProxyVM-AHV.ps1 -PrismCentral pc.example.com -UserDataPath ./office-user-data.yaml -Subnet VLAN20 -SkipCertificateCheck
+```
+
+Add `-Cluster NAME` when Prism Central manages several clusters. The image is
+uploaded once and reused for later proxies. `-PrismDownloadsImage` makes Prism
+Central fetch the image itself instead, which is quicker when the cluster has
+internet access.
+
+**VMware, through vCenter** (needs PowerCLI: `Install-Module VMware.PowerCLI -Scope CurrentUser`, or pass `-InstallPowerCLI`):
+
+```powershell
+./New-MonitorProxyVM-VMware.ps1 -VCenter vcenter.example.com -UserDataPath ./office-user-data.yaml -Cluster Prod -Datastore vsanDatastore -Network 'VM Network' -SkipCertificateCheck
+```
+
+Use `-VMHost` instead of `-Cluster` to pick a host, and `-Folder` for a VM
+folder.
+
+Both prompt for the login, default to 1 vCPU, 1 GB and a 10 GB disk
+(`-Cpu`, `-MemoryGB`, `-DiskGB`), name the VM after the hostname in the
+first-boot file (`-VMName` overrides), and support `-WhatIf`. Drop
+`-SkipCertificateCheck` if Prism Central or vCenter has a trusted
+certificate. `Get-Help ./New-MonitorProxyVM-AHV.ps1 -Full` lists every option.
+
+Then skip to **Check it**. The manual steps below do the same by hand.
+
+## 3a. Nutanix AHV (by hand)
 
 Once per cluster, add the image:
 
@@ -55,7 +91,7 @@ For each proxy:
    and paste the text from **Copy for AHV**.
 5. Save and power on.
 
-## 2b. VMware vSphere (vCenter)
+## 3b. VMware vSphere (vCenter, by hand)
 
 1. **Deploy OVF Template**, URL
    `https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.ova`.
@@ -75,7 +111,7 @@ To make later proxies quicker, deploy the OVA once without powering it on and
 convert it to a template; then **New VM from This Template** and fill in
 **Encoded user-data** under **Customize vApp properties**.
 
-## 3. Check it
+## 4. Check it
 
 Within two or three minutes of power-on the proxy shows **online** on the
 Proxies page. Then assign devices to it on the Devices page.
