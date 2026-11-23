@@ -39,6 +39,8 @@ abstract class TestCase extends \PHPUnit\Framework\TestCase
         $this->db->pdo->exec('SET FOREIGN_KEY_CHECKS = 1');
         $this->db->exec("UPDATE settings SET `value` = '3' WHERE `key` = 'down_threshold'");
         $this->db->exec("UPDATE settings SET `value` = 'unknown' WHERE `key` = 'web_ping_method'");
+        $this->db->exec("UPDATE settings SET `value` = '7' WHERE `key` = 'raw_retention_days'");
+        $this->db->exec("DELETE FROM settings WHERE `key` = 'refresh_default_s'");
         Clock::$now = null;
         $this->app = new App([
             'db' => [], 'base_url' => 'https://monitor.test', 'timezone' => 'UTC', 'session_ttl' => 3600,

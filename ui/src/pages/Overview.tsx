@@ -4,13 +4,15 @@ import { api, type Overview as OverviewData, type OverviewDevice } from "../api/
 import Sparkline from "../components/Sparkline";
 import { fmtAgo, fmtDuration, fmtFor, fmtPct, fmtRtt } from "../lib/format";
 import { useAuth } from "../lib/auth";
+import { useRefresh } from "../lib/refresh";
 
 export default function Overview() {
   const { me } = useAuth();
+  const { ms } = useRefresh();
   const q = useQuery({
     queryKey: ["overview"],
     queryFn: () => api.get<OverviewData>("/api/overview"),
-    refetchInterval: 10_000,
+    refetchInterval: ms,
   });
   if (q.isLoading) return <div className="page-loading">Loading…</div>;
   if (q.isError || !q.data)

@@ -8,6 +8,8 @@ import Devices from "./pages/Devices";
 import Agents from "./pages/Agents";
 import Account from "./pages/Account";
 import Users from "./pages/Users";
+import Settings from "./pages/Settings";
+import { RefreshProvider } from "./lib/refresh";
 
 export default function App() {
   return (
@@ -17,7 +19,9 @@ export default function App() {
         <Route
           element={
             <RequireAuth>
-              <Layout />
+              <RefreshProvider>
+                <Layout />
+              </RefreshProvider>
             </RequireAuth>
           }
         >
@@ -45,6 +49,14 @@ export default function App() {
             element={
               <RequireAuth admin>
                 <Users />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="settings"
+            element={
+              <RequireAuth admin>
+                <Settings />
               </RequireAuth>
             }
           />

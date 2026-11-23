@@ -130,6 +130,33 @@ final class ApiTest extends TestCase
         $this->assertCount(1, $this->json($this->request('GET', '/api/users', null, [], $samCookie))['users']);
     }
 
+    public function testSettings(): void
+    {
+        $this->createUser();
+        $this->createUser('v@test.local', 'viewer');
+        $cookie = $this->login();
+        $viewer = $this->login('v@test.local');
+
+        $r = $this->request('GET', '/api/settings', null, [], $cookie);
+        $this->assertSame(200, $r->status, $r->body);
+        $got = $this->json($r);
+        $this->assertSame(['down_threshold' => 3, 'raw_retention_days' => 7, 'refresh_default_s' => 10], $got['settings']);
+        $this->assertSame('https://monitor.test', $got['info']['base_url']);
+        $this->assertSame(10, $this->json($this->request('GET', '/api/auth/me', null, [], $viewer))['refresh_default_s']);
+
+        $r = $this->request('PATCH', '/api/settings', ['down_threshold' => 5, 'refresh_default_s' => 60], [], $cookie);
+        $this->assertSame(200, $r->status, $r->body);
+        $this->assertSame(['down_threshold' => 5, 'raw_retention_days' => 7, 'refresh_default_s' => 60], $this->json($r)['settings']);
+        $this->assertSame('5', $this->db->value("SELECT `value` FROM settings WHERE `key` = 'down_threshold'"));
+        $this->assertSame(60, $this->json($this->request('GET', '/api/auth/me', null, [], $viewer))['refresh_default_s']);
+
+        foreach ([['down_threshold' => 0], ['down_threshold' => '4'], ['raw_retention_days' => 400], ['refresh_default_s' => 7], ['web_ping_method' => 'icmp']] as $bad) {
+            $this->assertSame(400, $this->request('PATCH', '/api/settings', $bad, [], $cookie)->status, json_encode($bad));
+        }
+        $this->assertSame(403, $this->request('GET', '/api/settings', null, [], $viewer)->status);
+        $this->assertSame(403, $this->request('PATCH', '/api/settings', ['down_threshold' => 1], [], $viewer)->status);
+    }
+
     public function testDeviceValidationAndCrud(): void
     {
         $this->createUser();

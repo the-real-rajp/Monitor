@@ -56,6 +56,8 @@ final class AuthHandlers
         return Response::json([
             'user'     => Users::toApi($req->principal->user),
             'timezone' => $this->app->timezone()->getName(),
+            // Auto-refresh interval browsers use until the person picks their own.
+            'refresh_default_s' => $this->app->settings->refreshDefaultSeconds(),
         ]);
     }
 

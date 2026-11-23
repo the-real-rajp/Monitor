@@ -13,6 +13,7 @@ use Monitor\Handlers\DeviceHandlers;
 use Monitor\Handlers\GroupHandlers;
 use Monitor\Handlers\HealthHandlers;
 use Monitor\Handlers\OverviewHandlers;
+use Monitor\Handlers\SettingsHandlers;
 use Monitor\Handlers\UserHandlers;
 use Monitor\Http\Auth;
 use Monitor\Http\HttpError;
@@ -84,6 +85,7 @@ final class App
         $agentApi = new AgentApiHandlers($this);
         $health = new HealthHandlers($this);
         $users = new UserHandlers($this);
+        $settings = new SettingsHandlers($this);
 
         $r->add('GET', '/api/health', $health->health(...), Auth::None);
         $r->add('GET', '/install.sh', $health->installScript(...), Auth::None);
@@ -99,6 +101,9 @@ final class App
         $r->add('PATCH', '/api/users/{id}', $users->update(...), Auth::Admin);
         $r->add('DELETE', '/api/users/{id}', $users->delete(...), Auth::Admin);
         $r->add('POST', '/api/users/{id}/password', $users->setPassword(...), Auth::Admin);
+
+        $r->add('GET', '/api/settings', $settings->get(...), Auth::Admin);
+        $r->add('PATCH', '/api/settings', $settings->update(...), Auth::Admin);
 
         $r->add('GET', '/api/overview', $overview->overview(...), Auth::Session);
 

@@ -150,6 +150,14 @@ button:disabled {
   color: var(--accent-ink);
   font-weight: 600;
 }
+.refresh-select {
+  height: 32px;
+  font-size: 13px;
+  color: var(--text-2);
+}
+.refresh-now {
+  min-width: 86px;
+}
 .spacer {
   flex: 1 1 auto;
 }

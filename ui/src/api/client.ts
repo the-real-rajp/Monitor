@@ -65,6 +65,23 @@ export interface User {
 export interface Me {
   user: User;
   timezone: string;
+  /** Site-wide auto-refresh interval in seconds; 0 is off. */
+  refresh_default_s: number;
+}
+
+export interface SiteSettings {
+  settings: {
+    down_threshold: number;
+    raw_retention_days: number;
+    refresh_default_s: number;
+  };
+  info: {
+    version: string;
+    build: string | null;
+    base_url: string;
+    timezone: string;
+    web_ping_method: string;
+  };
 }
 
 export interface DeviceStatus {
