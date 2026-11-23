@@ -409,6 +409,21 @@ function DeviceForm({
   );
 }
 
+/** Common groups offered for one-click adding. Nothing is created until asked. */
+const SUGGESTED_GROUPS = [
+  "Firewalls",
+  "Internet",
+  "Switches",
+  "Wireless",
+  "Servers",
+  "Hypervisors",
+  "Storage",
+  "Printers",
+  "Phones",
+  "Cameras",
+  "UPS & Power",
+];
+
 function GroupsButton({ groups, onChange }: { groups: Group[]; onChange: () => void }) {
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
@@ -422,6 +437,17 @@ function GroupsButton({ groups, onChange }: { groups: Group[]; onChange: () => v
     },
     onError: (e) => setError(errorMessage(e)),
   });
+  // One at a time, so the groups keep the order they are listed in.
+  const addSuggested = useMutation({
+    mutationFn: async (names: string[]) => {
+      for (const n of names) await api.post("/api/groups", { name: n });
+    },
+    onSuccess: () => setError(null),
+    onError: (e) => setError(errorMessage(e)),
+    onSettled: onChange,
+  });
+  const existing = new Set(groups.map((g) => g.name.trim().toLowerCase()));
+  const suggestions = SUGGESTED_GROUPS.filter((n) => !existing.has(n.toLowerCase()));
   const rename = useMutation({
     mutationFn: (g: { id: number; name: string }) =>
       api.patch(`/api/groups/${g.id}`, { name: g.name }),
@@ -434,14 +460,14 @@ function GroupsButton({ groups, onChange }: { groups: Group[]; onChange: () => v
     onError: (e) => setError(errorMessage(e)),
   });
   return (
-    <>
+    <span style={{ position: "relative" }}>
       <button className="btn" onClick={() => setOpen((o) => !o)} aria-expanded={open}>
         Manage groups
       </button>
       {open && (
         <div
           className="card col"
-          style={{ position: "absolute", zIndex: 5, marginTop: 44, width: 320 }}
+          style={{ position: "absolute", zIndex: 5, top: "calc(100% + 8px)", right: 0, width: 360 }}
         >
           <h2>Groups</h2>
           {groups.map((g) => (
@@ -490,12 +516,39 @@ function GroupsButton({ groups, onChange }: { groups: Group[]; onChange: () => v
               Add
             </button>
           </form>
+          {suggestions.length > 0 && (
+            <div className="col" style={{ gap: 8 }}>
+              <div className="row between">
+                <span className="small muted">Suggested groups. Click one to add it.</span>
+                <button
+                  className="btn sm"
+                  onClick={() => addSuggested.mutate(suggestions)}
+                  disabled={addSuggested.isPending}
+                >
+                  Add all
+                </button>
+              </div>
+              <div className="row" style={{ gap: 6, flexWrap: "wrap" }}>
+                {suggestions.map((n) => (
+                  <button
+                    key={n}
+                    className="btn sm"
+                    onClick={() => addSuggested.mutate([n])}
+                    disabled={addSuggested.isPending}
+                    aria-label={`Add group ${n}`}
+                  >
+                    + {n}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
           {error && <div className="error">{error}</div>}
           <button className="btn sm" onClick={() => setOpen(false)}>
             Close
           </button>
         </div>
       )}
-    </>
+    </span>
   );
 }
