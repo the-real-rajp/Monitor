@@ -132,8 +132,7 @@ export default function Users() {
     <>
       <div className="row between" style={{ alignItems: "flex-end" }}>
         <div>
-          <h1>Users</h1>
-          <p className="muted" style={{ margin: "4px 0 0", maxWidth: 760 }}>
+          <p className="muted" style={{ margin: 0, maxWidth: 760 }}>
             People who can sign in to this dashboard. Admins can change devices, proxies and users.
             Viewers can only look.
           </p>

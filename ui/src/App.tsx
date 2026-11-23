@@ -1,6 +1,7 @@
 import { Navigate, Route, Routes } from "react-router-dom";
 import { AuthProvider, RequireAuth } from "./lib/auth";
 import Layout from "./components/Layout";
+import SettingsLayout from "./components/SettingsLayout";
 import Login from "./pages/Login";
 import Overview from "./pages/Overview";
 import DevicePage from "./pages/Device";
@@ -45,21 +46,17 @@ export default function App() {
             }
           />
           <Route
-            path="users"
-            element={
-              <RequireAuth admin>
-                <Users />
-              </RequireAuth>
-            }
-          />
-          <Route
             path="settings"
             element={
               <RequireAuth admin>
-                <Settings />
+                <SettingsLayout />
               </RequireAuth>
             }
-          />
+          >
+            <Route index element={<Settings />} />
+            <Route path="users" element={<Users />} />
+          </Route>
+          <Route path="users" element={<Navigate to="/settings/users" replace />} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

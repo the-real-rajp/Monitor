@@ -53,11 +53,6 @@ export default function Layout() {
             </NavLink>
           )}
           {isAdmin && (
-            <NavLink to="/users" className={({ isActive }) => (isActive ? "active" : "")}>
-              Users
-            </NavLink>
-          )}
-          {isAdmin && (
             <NavLink to="/settings" className={({ isActive }) => (isActive ? "active" : "")}>
               Settings
             </NavLink>

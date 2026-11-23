@@ -58,12 +58,9 @@ export default function Settings() {
 
   return (
     <>
-      <div>
-        <h1>Settings</h1>
-        <p className="muted" style={{ margin: "4px 0 0", maxWidth: 760 }}>
-          These apply to the whole site and everyone who uses it.
-        </p>
-      </div>
+      <p className="muted" style={{ margin: 0, maxWidth: 760 }}>
+        These apply to the whole site and everyone who uses it.
+      </p>
 
       <form className="card col" style={{ maxWidth: 640 }} onSubmit={submit}>
         <h2>Dashboard</h2>
