@@ -76,6 +76,10 @@ on the Raspberry Pi or Linux box. The command downloads the binary for the
 CPU from this repository's GitHub releases, so a tag like `v0.1.0` must exist
 (the `release` workflow builds it). Then assign devices to the proxy.
 
+To run the proxy as a VM on Nutanix AHV or VMware instead, see
+`docs/PROXY-VM.md`: the same dialog gives you a first-boot file for a stock
+Ubuntu cloud image.
+
 ## Updating
 
 Push to `main`. Within a few minutes the deploy branch updates. In cPanel's

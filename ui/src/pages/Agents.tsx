@@ -4,6 +4,53 @@ import { Link } from "react-router-dom";
 import { api, errorMessage, type Agent } from "../api/client";
 import { fmtAgo, fmtDateTime } from "../lib/format";
 
+/** First-boot file for running the proxy as a VM instead of on a Pi. */
+function VmSetup({ name, userData }: { name: string; userData: string }) {
+  const [copied, setCopied] = useState<string | null>(null);
+  const copy = (label: string, text: string) => {
+    void navigator.clipboard.writeText(text).then(() => {
+      setCopied(label);
+      setTimeout(() => setCopied(null), 2000);
+    });
+  };
+  const download = () => {
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([userData], { type: "text/yaml" }));
+    a.download = `${name.toLowerCase().replace(/[^a-z0-9]+/g, "-") || "proxy"}-user-data.yaml`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  };
+  return (
+    <details>
+      <summary>
+        <strong>Or run it as a VM (Nutanix AHV, VMware)</strong>
+      </summary>
+      <div className="col" style={{ marginTop: 10 }}>
+        <span className="small muted">
+          Create a VM from the Ubuntu Server cloud image and give it this cloud-init user data. It
+          installs the proxy on first boot; nothing to type on the VM. AHV takes the text as the
+          cloud-init custom script. The Ubuntu OVA on vSphere wants the base64 form in its “Encoded
+          user-data” field. The file contains the key above.
+        </span>
+        <div className="row" style={{ gap: 8 }}>
+          <button className="btn sm" onClick={() => copy("text", userData)}>
+            {copied === "text" ? "Copied" : "Copy for AHV"}
+          </button>
+          <button className="btn sm" onClick={() => copy("b64", btoa(userData))}>
+            {copied === "b64" ? "Copied" : "Copy base64 for VMware"}
+          </button>
+          <button className="btn sm" onClick={download}>
+            Download user-data.yaml
+          </button>
+        </div>
+        <pre className="code" style={{ maxHeight: 260, overflowY: "auto" }}>
+          {userData}
+        </pre>
+      </div>
+    </details>
+  );
+}
+
 export default function Agents() {
   const qc = useQueryClient();
   const q = useQuery({
@@ -115,6 +162,7 @@ export default function Agents() {
             Run this on the Pi (as root) to install or update the proxy:
           </span>
           <pre className="code">{created.install_command}</pre>
+          {created.cloud_init && <VmSetup name={created.name} userData={created.cloud_init} />}
           <button
             className="btn sm"
             onClick={() => setCreated(null)}
@@ -256,6 +304,11 @@ export default function Agents() {
             changes within a minute.
           </li>
         </ol>
+        <p className="small muted" style={{ margin: 0 }}>
+          No Pi to hand? The same proxy runs as a small VM on Nutanix AHV or VMware: after you add a
+          proxy, open <strong>Or run it as a VM</strong> under its key for a ready-made first-boot
+          file.
+        </p>
         <p className="small muted" style={{ margin: 0 }}>
           The proxy needs outbound HTTPS to this site and ICMP on the local network. It buffers up
           to 24 hours of results if this site is unreachable and backfills them with their original

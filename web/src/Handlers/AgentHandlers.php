@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 namespace Monitor\Handlers;
 
+use Monitor\Agent\CloudInit;
 use Monitor\App;
 use Monitor\Auth\AgentKeys;
 use Monitor\Clock;
@@ -44,6 +45,7 @@ final class AgentHandlers
         $out = self::toApi($this->load($id), Clock::now());
         $out['key'] = $k['key'];
         $out['install_command'] = $this->installCommand($k['key']);
+        $out['cloud_init'] = CloudInit::render($this->app->baseUrl(), $k['key'], (string) $out['name']);
         return Response::json($out, 201);
     }
 
@@ -82,6 +84,7 @@ final class AgentHandlers
         $out = self::toApi($this->load($id), Clock::now());
         $out['key'] = $k['key'];
         $out['install_command'] = $this->installCommand($k['key']);
+        $out['cloud_init'] = CloudInit::render($this->app->baseUrl(), $k['key'], (string) $out['name']);
         return Response::json($out);
     }
 

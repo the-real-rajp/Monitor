@@ -115,6 +115,7 @@ export interface Agent {
   online: boolean;
   key?: string;
   install_command?: string;
+  cloud_init?: string;
 }
 
 export interface OverviewDevice {
