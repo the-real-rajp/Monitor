@@ -186,6 +186,17 @@ final class ApiTest extends TestCase
         $this->assertFalse($e['events'][0]['ongoing']);
     }
 
+    public function testVmScriptsDownloadWithoutLogin(): void
+    {
+        foreach (\Monitor\Handlers\HealthHandlers::VM_SCRIPTS as $file) {
+            $r = $this->request('GET', "/vm/$file");
+            $this->assertSame(200, $r->status);
+            $this->assertStringContainsString('#Requires -Version 7.0', $r->body);
+            $this->assertStringContainsString($file, (string) $r->header('Content-Disposition'));
+        }
+        $this->assertSame(404, $this->request('GET', '/vm/config.php')->status);
+    }
+
     public function testHealthAndSpaFallback(): void
     {
         $r = $this->request('GET', '/api/health');
