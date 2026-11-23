@@ -513,10 +513,17 @@ Write-Info "VM: $VMName, $Cpu vCPU, $MemoryGB GB memory, $DiskGB GB disk"
 # --- Ubuntu image ----------------------------------------------------------
 
 Write-Step 'Ubuntu image'
-$image = Get-PrismList image "name==$ImageName" |
-    Where-Object { $_.status.name -eq $ImageName -and (Get-Prop $_.status 'state') -eq 'COMPLETE' } | Select-Object -First 1
+function Test-ImageUsable($Image) {
+    # An image that finished uploading has a size; one left behind by an
+    # interrupted upload has none, or sits in a pending or error state.
+    $state = Get-Prop $Image.status 'state'
+    if ($state -and $state -notin 'COMPLETE', 'AVAILABLE', 'ACTIVE') { return $false }
+    $size = Get-Prop (Get-Prop $Image.status 'resources') 'size_bytes'
+    ($null -eq $size) -or ([double] $size -gt 0)
+}
+$image = Get-PrismList image | Where-Object { $_.status.name -eq $ImageName -and (Test-ImageUsable $_) } | Select-Object -First 1
 if ($image) {
-    Write-Info "'$ImageName' is already in Prism Central; it will be reused."
+    Write-Info "'$ImageName' is already in Prism Central. Nothing to do."
 }
 elseif (-not $ImageSource) {
     Write-Info "'$ImageName' is not in Prism Central yet. How should it get there?"
@@ -575,14 +582,11 @@ else {
 
 # --- The VM ----------------------------------------------------------------
 
-function New-ProxyVm($Container) {
+function New-ProxyVm {
     $disk = @{
         device_properties     = @{ device_type = 'DISK'; disk_address = @{ adapter_type = 'SCSI'; device_index = 0 } }
         data_source_reference = @{ kind = 'image'; uuid = $imageUuid }
         disk_size_mib         = $DiskGB * 1024
-    }
-    if ($Container) {
-        $disk.storage_config = @{ storage_container_reference = @{ kind = 'storage_container'; uuid = $Container.Uuid } }
     }
     $nic = @{ subnet_reference = @{ kind = 'subnet'; uuid = $subnetEntity.metadata.uuid }; is_connected = $true }
     if ($staticIp) { $nic.ip_endpoint_list = @(@{ ip = $staticIp; type = 'ASSIGNED' }) }
@@ -613,15 +617,58 @@ function New-ProxyVm($Container) {
     $response.metadata.uuid
 }
 
+function Move-VmDisks([string] $VmUuid, $Container) {
+    # Prism only clones an image-backed disk into the image's own container, so
+    # the disks are moved once the VM exists. This uses the v4 API (the v3 API
+    # has no such call); the move happens while the VM runs.
+    $common = @{ Credential = $Credential; Authentication = 'Basic'; SkipCertificateCheck = (-not $VerifyCertificate) }
+    $vmUri = "https://${PrismCentral}:9440/api/vmm/v4.0/ahv/config/vms/$VmUuid"
+    $responseHeaders = $null
+    Invoke-RestMethod @common -Method Get -Uri $vmUri -ResponseHeadersVariable responseHeaders | Out-Null
+    $etag = @($responseHeaders['ETag'])[0]
+    if (-not $etag) { throw 'Prism Central did not return a version tag for the VM.' }
+    $body = @{
+        migrateDisks = @{
+            '$objectType'    = 'vmm.v4.ahv.config.AllDisksMigrationPlan'
+            storageContainer = @{ extId = $Container.Uuid }
+        }
+    } | ConvertTo-Json -Depth 6
+    $started = Invoke-RestMethod @common -Method Post -Uri ($vmUri + '/$actions/migrate-vm-disks') -Body $body `
+        -ContentType 'application/json' -SkipHeaderValidation `
+        -Headers @{ 'If-Match' = $etag; 'NTNX-Request-Id' = [guid]::NewGuid().ToString() }
+    $taskId = Get-Prop (Get-Prop $started 'data') 'extId'
+    if (-not $taskId) { throw 'Prism Central did not return a task for the disk move.' }
+    $deadline = (Get-Date).AddMinutes(20)
+    while ($true) {
+        $task = Get-Prop (Invoke-RestMethod @common -Method Get -Uri "https://${PrismCentral}:9440/api/prism/v4.0/config/tasks/$taskId") 'data'
+        $status = Get-Prop $task 'status'
+        if ($status -eq 'SUCCEEDED') { return }
+        if ($status -in 'FAILED', 'CANCELED', 'CANCELLED') {
+            $why = (@(Get-Prop $task 'errorMessages') | ForEach-Object { Get-Prop $_ 'message' }) -join '; '
+            throw "The disk move failed: $why"
+        }
+        if ((Get-Date) -gt $deadline) { throw 'The disk move did not finish within 20 minutes; it may still be running in Prism.' }
+        Start-Sleep -Seconds 5
+    }
+}
+
 Write-Step "Create VM '$VMName'"
-try { $vmUuid = New-ProxyVm $containerChoice }
-catch {
-    if (-not $containerChoice) { throw }
-    # Some Prism versions only allow a disk cloned from an image to live where the image does.
-    Write-Problem "Prism did not create the VM on container '$($containerChoice.Name)':"
-    Write-Problem "$_"
-    if ($Yes -or -not (Read-YesNo 'Try again and let Prism decide the container?' $true)) { throw }
-    $vmUuid = New-ProxyVm $null
+$vmUuid = New-ProxyVm
+Write-Info 'VM created.'
+
+if ($containerChoice) {
+    Write-Step "Move the VM disk to '$($containerChoice.Name)'"
+    Write-Info 'Prism creates the disk next to the image first, then it is moved. This can take a few minutes ...'
+    try {
+        Move-VmDisks $vmUuid $containerChoice
+        Write-Info "Disk is now on '$($containerChoice.Name)'."
+    }
+    catch {
+        $moveDetail = if ($_.ErrorDetails) { $_.ErrorDetails.Message } else { '' }
+        Write-Problem "Could not move the disk: $($_.Exception.Message) $moveDetail"
+        Write-Problem "The VM works as it is, on the image's container. To move it later, run this on a CVM of the cluster:"
+        Write-Problem "    acli vm.update_container $VMName container=$($containerChoice.Name)"
+    }
 }
 
 if ($NoPowerOn) {

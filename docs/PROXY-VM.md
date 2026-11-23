@@ -57,6 +57,11 @@ subnet, automatic or fixed IP address, VM name and size, and how the Ubuntu
 image gets there. It shows a summary and asks before creating anything. The
 image is added once and reused for later proxies.
 
+Prism only clones an image-backed disk into the image's own container
+(`SelfServiceContainer` for images added through Prism Central). When you pick
+a different container, the script creates the VM and then moves its disks
+there; if the move is refused it prints the `acli` command that does it.
+
 A fixed address on a subnet with Nutanix IP management is reserved on the NIC.
 On a subnet without it, the script asks for the address, prefix, gateway and
 DNS servers and writes them into the VM.
