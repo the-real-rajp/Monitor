@@ -448,7 +448,7 @@ $staticIp = $null      # address for the NIC on a Nutanix-managed subnet
 $staticCidr = $null    # address/prefix written into the VM on an unmanaged subnet
 if (-not $IPAddress) {
     $automatic = if ($ipConfig) { 'Automatic: Nutanix picks a free address from the subnet' } else { 'Automatic: DHCP from your network' }
-    $picked = Select-FromMenu -Items @($automatic, 'A fixed address that I type in') -Label { param($x) $x } -Default 1
+    $picked = Select-FromMenu -Items @($automatic, 'Static: A fixed address that I type in') -Label { param($x) $x } -Default 1
     $IPAddress = if ($picked -eq $automatic) { 'dhcp' } else { '?' }
 }
 if ($IPAddress -ne 'dhcp') {
