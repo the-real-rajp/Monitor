@@ -149,7 +149,9 @@ export interface OverviewDevice {
   last_rtt_ms: number | null;
   last_method: Method | null;
   uptime_24h: number | null;
-  spark: (number | null)[] | null;
+  uptime_30d: number | null;
+  /** Daily uptime percentages, oldest first, aligned with Overview.days; null is no data. */
+  days: (number | null)[];
 }
 
 export interface Overview {
@@ -167,6 +169,9 @@ export interface Overview {
   web_pinger: { method: string; last_run_at: string | null; last_error: string | null };
   /** How long individual pings and hourly summaries are kept, in days. */
   retention: { raw_days: number; hourly_days: number };
+  timezone: string;
+  /** The dates (YYYY-MM-DD, site time zone) each device's `days` cover, oldest first. */
+  days: string[];
   groups: { id: number | null; name: string; devices: OverviewDevice[] }[];
 }
 

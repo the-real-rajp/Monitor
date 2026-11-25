@@ -1,13 +1,6 @@
 import { useState } from "react";
 import type { Day } from "../api/client";
-import { fmtDay, fmtDuration, fmtPct } from "../lib/format";
-
-function dayClass(p: number | null): string {
-  if (p === null) return "day-none";
-  if (p >= 99.9) return "day-ok";
-  if (p >= 99) return "day-warn";
-  return "day-bad";
-}
+import { dayClass, fmtDay, fmtDuration, fmtPct } from "../lib/format";
 
 function describe(d: Day): string {
   if (d.uptime === null) return `${fmtDay(d.date)}: no data`;

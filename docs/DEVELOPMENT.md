@@ -72,7 +72,7 @@ root both work.
 2. Proxies page: add a proxy, copy the key.
 3. Devices page: add `127.0.0.1` pinged by the proxy every 10s.
 4. Run the proxy with that key. Within 15 seconds the overview shows the
-   device up with a sparkline.
+   device up, with today filled in on its 30-day strip.
 5. Run `php bin/cron.php` a few times (or a `while true; do ...; sleep 60`
    loop) to see rollups and the website pinger.
 

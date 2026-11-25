@@ -15,7 +15,7 @@ export default function RttChart({ history }: { history: History }) {
     const el = ref.current;
     if (!el) return;
     const css = getComputedStyle(document.documentElement);
-    const accent = css.getPropertyValue("--accent").trim() || "#2457D6";
+    const accent = css.getPropertyValue("--accent").trim() || "#1F242C";
     const danger = css.getPropertyValue("--danger").trim() || "#D23F3F";
     const grid = css.getPropertyValue("--border-soft").trim() || "#EEF0F3";
     const text = css.getPropertyValue("--faint").trim() || "#8A93A0";
@@ -87,14 +87,14 @@ export default function RttChart({ history }: { history: History }) {
           stroke: text,
           grid: { stroke: grid },
           ticks: { stroke: grid },
-          font: "11px JetBrains Mono, monospace",
+          font: "11px IBM Plex Mono, monospace",
         },
         {
           stroke: text,
           grid: { stroke: grid },
           ticks: { stroke: grid },
           size: 50,
-          font: "11px JetBrains Mono, monospace",
+          font: "11px IBM Plex Mono, monospace",
           values: (_u, vals) =>
             vals.map((v) => (v >= 100 ? v.toFixed(0) : v.toFixed(v < 10 ? 1 : 0))),
         },

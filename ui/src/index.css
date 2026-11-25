@@ -7,9 +7,9 @@
   --text-2: #3c4450;
   --muted: #5b6470;
   --faint: #656e7a;
-  --accent: #2457d6;
-  --accent-ink: #1a43ad;
-  --accent-soft: #edf1fb;
+  --accent: #1f242c;
+  --accent-ink: #161a20;
+  --accent-soft: #e9ebee;
   --on-accent: #ffffff;
   --ok: #1e9e5a;
   --ok-ink: #16653a;
@@ -25,10 +25,11 @@
   --code-bg: #161a20;
   --code-fg: #e6e8eb;
   --radius: 10px;
-  --mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  --mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
   color-scheme: light dark;
+  accent-color: var(--accent);
   font-family:
-    Inter,
+    "IBM Plex Sans",
     system-ui,
     -apple-system,
     "Segoe UI",
@@ -46,9 +47,9 @@
     --text-2: #c5cad2;
     --muted: #9aa3ae;
     --faint: #808995;
-    --accent: #5b8def;
-    --accent-ink: #9ab8f5;
-    --accent-soft: #1b2740;
+    --accent: #e6e8eb;
+    --accent-ink: #ffffff;
+    --accent-soft: #2c323c;
     --on-accent: #0f1115;
     --ok: #2fb86e;
     --ok-ink: #7ad8a4;
@@ -82,6 +83,15 @@ a {
 }
 a:hover {
   text-decoration: underline;
+}
+/* The accent is a neutral, so links in running text are marked by an underline, not a hue. */
+p a:not(.btn),
+li a:not(.btn),
+dd a:not(.btn),
+.crumbs a {
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
 }
 h1 {
   font-size: 22px;
@@ -371,10 +381,8 @@ main.page {
   gap: 6px;
 }
 .label {
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
+  font-size: 13px;
+  font-weight: 500;
   color: var(--muted);
 }
 .stat .value {
@@ -425,98 +433,238 @@ main.page {
   gap: 12px;
 }
 
-/* device tiles */
-.section-title {
-  font-size: 13px;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--muted);
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-.section-title .note {
-  font-weight: 500;
-  text-transform: none;
-  letter-spacing: 0;
-  color: var(--faint);
-}
-.section-title.danger {
-  color: var(--danger-ink);
-}
+/* device board: one row per device, its last 30 days as a strip */
 .tiles {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
   gap: 14px;
 }
-.tile {
-  color: inherit;
+.board {
+  --cols: minmax(180px, 280px) minmax(0, 1fr) 76px 112px;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  padding: 16px 18px;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
+  overflow: hidden;
 }
-.tile:hover {
-  text-decoration: none;
-  border-color: var(--accent);
+.board-cols,
+.dev {
+  display: grid;
+  grid-template-columns: var(--cols);
+  column-gap: 24px;
+  align-items: center;
+  padding: 0 20px;
 }
-.tile.down {
-  border-color: var(--danger-border);
-  box-shadow: inset 4px 0 0 var(--danger);
+.board-cols {
+  min-height: 40px;
+  font-size: 12px;
+  color: var(--muted);
+  border-bottom: 1px solid var(--border);
 }
-.tile.unknown {
-  opacity: 0.85;
-}
-.tile .head {
+.board-axis {
   display: flex;
   justify-content: space-between;
-  align-items: flex-start;
   gap: 12px;
 }
-.tile .name {
-  font-weight: 600;
+.num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.group + .group {
+  border-top: 1px solid var(--border);
+}
+.group-head {
+  padding: 18px 20px 6px;
   font-size: 15px;
+  font-weight: 600;
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 2px 12px;
+}
+.group-head .note {
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--muted);
+}
+.group.down .group-head {
+  color: var(--danger-ink);
+}
+.group > .dev:last-child {
+  margin-bottom: 8px;
+}
+.dev {
+  color: inherit;
+  min-height: 52px;
+  padding-top: 8px;
+  padding-bottom: 8px;
+}
+.dev {
+  position: relative;
+}
+.dev:hover {
+  background: var(--chip);
+}
+/* The name is the link; it stretches over the row, and the strip sits above it. */
+.dev-link {
+  color: inherit;
+}
+.dev-link:hover {
+  text-decoration: none;
+}
+.dev-link::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+}
+.dev-link:focus-visible {
+  outline: none;
+}
+.dev-link:focus-visible::after {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+.dev.down {
+  background: var(--danger-soft);
+  box-shadow: inset 4px 0 0 var(--danger);
+}
+.dev-who {
+  min-width: 0;
+}
+.dev-name {
+  font-weight: 600;
   display: flex;
   align-items: center;
   gap: 8px;
 }
-.tile .host {
-  font-size: 12px;
-  color: var(--muted);
+.dev-host {
   font-family: var(--mono);
-  margin-left: 17px;
-}
-.tile .foot {
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: 12px;
-}
-.tile .rtt {
-  font-size: 24px;
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-  letter-spacing: -0.01em;
-  line-height: 1;
-}
-.tile .rtt .unit {
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--muted);
-  margin-left: 3px;
-  letter-spacing: 0;
-}
-.tile .rtt.down {
-  color: var(--danger-ink);
-}
-.tile .sub {
   font-size: 12px;
   color: var(--muted);
-  margin-top: 4px;
+  margin-left: 17px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dev-group {
+  font-family: "IBM Plex Sans", system-ui, sans-serif;
+  margin-left: 10px;
+}
+.dev-strip {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  gap: 2px;
+  height: 26px;
+}
+.dev-strip {
+  position: relative;
+  z-index: 1;
+}
+.dev-strip button {
+  position: relative;
+  border: 0;
+  padding: 0;
+  min-width: 0;
+  border-radius: 2px;
+}
+.dev-strip button[aria-pressed="true"] {
+  outline: 2px solid var(--text);
+  outline-offset: 1px;
+}
+.dev-strip button[aria-pressed="true"]::after {
+  content: attr(data-tip);
+  position: absolute;
+  bottom: calc(100% + 7px);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 5;
+  padding: 3px 8px;
+  border-radius: 4px;
+  background: var(--text);
+  color: var(--surface);
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+  pointer-events: none;
+}
+@media (hover: hover) {
+  .dev-strip button:hover::after {
+    content: attr(data-tip);
+    position: absolute;
+    bottom: calc(100% + 7px);
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 5;
+    padding: 3px 8px;
+    border-radius: 4px;
+    background: var(--text);
+    color: var(--surface);
+    font-size: 12px;
+    font-weight: 500;
+    white-space: nowrap;
+    pointer-events: none;
+  }
+}
+.dev-strip button.tip-l::after {
+  left: 0;
+  transform: none;
+}
+.dev-strip button.tip-r::after {
+  left: auto;
+  right: 0;
+  transform: none;
+}
+table.dense td {
+  padding-top: 8px;
+  padding-bottom: 8px;
+}
+.dev.unknown .dev-strip {
+  opacity: 0.6;
+}
+.dev-pct {
+  color: var(--text-2);
+}
+.dev-now {
+  font-weight: 600;
+  font-size: 15px;
+}
+.dev-now .unit {
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--muted);
+  margin-left: 4px;
+}
+@media (max-width: 720px) {
+  .board-cols {
+    display: none;
+  }
+  .dev {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      "who now"
+      "who pct"
+      "strip strip";
+    gap: 0 12px;
+    padding: 12px 16px;
+  }
+  .dev-who {
+    grid-area: who;
+  }
+  .dev-now {
+    grid-area: now;
+  }
+  .dev-strip {
+    grid-area: strip;
+    height: 20px;
+    margin-top: 8px;
+  }
+  .dev-pct {
+    grid-area: pct;
+    font-size: 12px;
+  }
+  .group-head {
+    padding: 16px 16px 4px;
+  }
 }
 
 /* banner */
@@ -609,7 +757,7 @@ tr:last-child td {
   font-weight: 600;
 }
 .btn.primary:hover {
-  filter: brightness(1.05);
+  opacity: 0.88;
 }
 .btn.danger {
   color: var(--danger-ink);

@@ -1,14 +1,16 @@
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { api, type Overview as OverviewData, type OverviewDevice } from "../api/client";
-import Sparkline from "../components/Sparkline";
-import { fmtAgo, fmtDuration, fmtFor, fmtPct, fmtRtt } from "../lib/format";
+import { dayClass, fmtAgo, fmtDay, fmtDuration, fmtFor, fmtPct, fmtRtt } from "../lib/format";
 import { useAuth } from "../lib/auth";
 import { refreshLabel, useRefresh } from "../lib/refresh";
 
 export default function Overview() {
   const { me } = useAuth();
   const { ms, choice, siteDefault } = useRefresh();
+  // The one day whose figure is showing, as "deviceId:index".
+  const [day, setDay] = useState<string | null>(null);
   const refreshS = choice === "default" ? siteDefault : choice;
   const q = useQuery({
     queryKey: ["overview"],
@@ -127,42 +129,74 @@ export default function Overview() {
         </div>
       )}
 
-      {down.length > 0 && (
-        <section className="col">
-          <h2 className="section-title danger">
-            <span className="dot down" /> Down
-          </h2>
-          <div className="tiles">
-            {down.map((d) => (
-              <Tile key={d.id} d={d} group={o.groups.find((g) => g.devices.includes(d))?.name} />
-            ))}
+      {all.length > 0 && (
+        <div className="board">
+          <div className="board-cols" aria-hidden="true">
+            <span>Device</span>
+            <span className="board-axis">
+              <span>{o.days[0] ? fmtDay(o.days[0]) : ""}</span>
+              <span>Daily uptime, last {o.days.length} days</span>
+              <span>Today</span>
+            </span>
+            <span className="num">{o.days.length} days</span>
+            <span className="num">Now</span>
           </div>
-        </section>
+
+          {down.length > 0 && (
+            <section className="group down" aria-label="Down">
+              <h2 className="group-head">Down</h2>
+              {down.map((d) => (
+                <Row
+                  key={d.id}
+                  d={d}
+                  dates={o.days}
+                  day={day}
+                  setDay={setDay}
+                  group={o.groups.find((g) => g.devices.includes(d))?.name}
+                />
+              ))}
+            </section>
+          )}
+
+          {o.groups.map((g) => {
+            // Down devices are already listed under "Down"; each device has one row.
+            const rest = g.devices.filter((d) => d.state !== "down");
+            const nDown = g.devices.length - rest.length;
+            return (
+              <section key={g.id ?? "none"} className="group" aria-label={g.name}>
+                <h2 className="group-head">
+                  {g.name}
+                  <span className="note">
+                    {groupNote(g.devices)}
+                    {nDown > 0 && `, ${nDown} down (listed above)`}
+                  </span>
+                </h2>
+                {rest.map((d) => (
+                  <Row key={d.id} d={d} dates={o.days} day={day} setDay={setDay} />
+                ))}
+              </section>
+            );
+          })}
+        </div>
       )}
 
-      {o.groups.map((g) => {
-        // Down devices are already listed under "Down"; each device has one tile.
-        const rest = g.devices.filter((d) => d.state !== "down");
-        const nDown = g.devices.length - rest.length;
-        return (
-          <section key={g.id ?? "none"} className="col">
-            <h2 className="section-title">
-              {g.name}
-              <span className="note">
-                {groupNote(g.devices)}
-                {nDown > 0 && ` · ${nDown} down, listed above`}
-              </span>
-            </h2>
-            {rest.length > 0 && (
-              <div className="tiles">
-                {rest.map((d) => (
-                  <Tile key={d.id} d={d} />
-                ))}
-              </div>
-            )}
-          </section>
-        );
-      })}
+      {all.length > 0 && (
+        <div className="legend">
+          <span>
+            <i className="swatch day-ok" /> 99.9% and above
+          </span>
+          <span>
+            <i className="swatch day-warn" /> 99% to 99.9%
+          </span>
+          <span>
+            <i className="swatch day-bad" /> below 99%
+          </span>
+          <span>
+            <i className="swatch day-none" /> no data
+          </span>
+          <span>Days start at midnight, {o.timezone}</span>
+        </div>
+      )}
 
       <p className="small faint" style={{ margin: 0 }}>
         {refreshS > 0 ? `Refreshes every ${refreshLabel(refreshS)}` : "Auto-refresh is off"}
@@ -180,56 +214,88 @@ function fmtDays(days: number): string {
 
 function groupNote(devices: OverviewDevice[]): string {
   const srcs = new Set(
-    devices.map((d) => (d.source === "web" ? "website" : (d.agent_name ?? "proxy"))),
+    devices.map((d) => (d.source === "web" ? "the website" : (d.agent_name ?? "a proxy"))),
   );
   const ints = new Set(devices.map((d) => d.interval_s));
-  const every = ints.size === 1 ? ` · every ${fmtDuration([...ints][0]!)}` : "";
-  return [...srcs].join(", ") + every;
+  const every = ints.size === 1 ? `, every ${fmtDuration([...ints][0]!)}` : "";
+  return "Pinged by " + [...srcs].join(" and ") + every;
 }
 
-function Tile({ d, group }: { d: OverviewDevice; group?: string }) {
-  // Only the exceptions get a badge; a plain ICMP reply is the normal case.
-  const badge =
-    d.state === "down"
-      ? `down ${fmtFor(d.since)}`
-      : d.state === "unknown"
-        ? "no data"
-        : d.last_method === "tcp"
-          ? "TCP"
-          : null;
+function stripSummary(days: (number | null)[]): string {
+  const n = (cls: string) => days.filter((p) => dayClass(p) === cls).length;
+  const parts = [
+    [n("day-ok"), "at 99.9% or above"],
+    [n("day-warn"), "between 99% and 99.9%"],
+    [n("day-bad"), "below 99%"],
+    [n("day-none"), "with no data"],
+  ] as const;
   return (
-    <Link to={`/devices/${d.id}`} className={`tile ${d.state}`}>
-      <div className="head">
-        <div style={{ minWidth: 0 }}>
-          <div className="name">
-            <span className={`dot ${d.state}`} />
-            {d.name}
-          </div>
-          <div className="host">
-            {d.host}
-            {group && ` · ${group}`}
-          </div>
+    `Last ${days.length} days: ` +
+    parts
+      .filter(([count]) => count > 0)
+      .map(([count, what]) => `${count} ${what}`)
+      .join(", ")
+  );
+}
+
+/** One device: who it is, its last 30 days as a strip, and how it is doing right now. */
+function Row({
+  d,
+  dates,
+  group,
+  day,
+  setDay,
+}: {
+  d: OverviewDevice;
+  dates: string[];
+  group?: string;
+  day: string | null;
+  setDay: (k: string | null) => void;
+}) {
+  return (
+    <div className={`dev ${d.state}`}>
+      <Link to={`/devices/${d.id}`} className="dev-who dev-link">
+        <div className="dev-name">
+          <span className={`dot ${d.state}`} role="img" aria-label={d.state} />
+          {d.name}
         </div>
-        {badge && (
-          <span className={`pill soft ${d.state === "down" ? "danger" : ""}`}>{badge}</span>
+        <div className="dev-host">
+          {d.host}
+          {group && <span className="dev-group">{group}</span>}
+        </div>
+      </Link>
+      <div className="dev-strip" role="group" aria-label={stripSummary(d.days)}>
+        {d.days.map((p, i) => {
+          const key = `${d.id}:${i}`;
+          const tip = `${dates[i] ? fmtDay(dates[i]) : ""}: ${p === null ? "no data" : fmtPct(p)}`;
+          return (
+            <button
+              key={i}
+              type="button"
+              tabIndex={-1}
+              className={`${dayClass(p)} ${i < 6 ? "tip-l" : i > d.days.length - 7 ? "tip-r" : ""}`}
+              aria-label={tip}
+              aria-pressed={day === key}
+              data-tip={tip}
+              onClick={() => setDay(day === key ? null : key)}
+            />
+          );
+        })}
+      </div>
+      <div className="dev-pct num">{fmtPct(d.uptime_30d)}</div>
+      <div className="dev-now num">
+        {d.state === "down" ? (
+          <span className="danger-ink">down {fmtFor(d.since)}</span>
+        ) : d.state === "unknown" ? (
+          <span className="muted">no data</span>
+        ) : (
+          <>
+            {fmtRtt(d.last_rtt_ms)}
+            {d.last_rtt_ms !== null && <span className="unit">ms</span>}
+            {d.last_method === "tcp" && <span className="unit">TCP</span>}
+          </>
         )}
       </div>
-      <div className="foot">
-        <div>
-          <div className={`rtt ${d.state === "down" ? "down" : ""}`}>
-            {d.state === "down" ? (
-              "timeout"
-            ) : (
-              <>
-                {fmtRtt(d.last_rtt_ms)}
-                {d.last_rtt_ms !== null && <span className="unit">ms</span>}
-              </>
-            )}
-          </div>
-          <div className="sub">24h uptime {fmtPct(d.uptime_24h)}</div>
-        </div>
-        <Sparkline points={d.spark} />
-      </div>
-    </Link>
+    </div>
   );
 }
