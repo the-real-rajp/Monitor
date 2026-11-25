@@ -148,8 +148,7 @@ gunzip -c storage/backups/monitor-20261125-031500.sql.gz | mysql -u cpuser_monit
 
 The database user, password and name are the ones in `config.php`. Turn the
 cron job back on afterwards. Anything recorded after the backup was taken is
-gone; proxies resend up to 24 hours of results they could not deliver, so
-turning cron off briefly loses nothing from them.
+gone.
 
 ## Troubleshooting
 
