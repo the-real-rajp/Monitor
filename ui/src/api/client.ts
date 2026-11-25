@@ -225,4 +225,16 @@ export interface Outage {
   detected_by: string;
 }
 
+export interface Health {
+  status: "ok" | "degraded";
+  checks: { database: string; cron?: string };
+  cron: { started_at: string; error: string | null } | null;
+}
+
+/** /api/health answers 503 when degraded, with the same body; both are data here. */
+export async function getHealth(): Promise<Health> {
+  const res = await fetch("/api/health", { credentials: "same-origin" });
+  return (await res.json()) as Health;
+}
+
 export const INTERVALS = [10, 15, 30, 60, 120, 300, 600];
