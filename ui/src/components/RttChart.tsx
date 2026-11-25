@@ -15,7 +15,7 @@ export default function RttChart({ history }: { history: History }) {
     const el = ref.current;
     if (!el) return;
     const css = getComputedStyle(document.documentElement);
-    const accent = css.getPropertyValue("--accent").trim() || "#2457D6";
+    const accent = css.getPropertyValue("--accent").trim() || "#1F242C";
     const danger = css.getPropertyValue("--danger").trim() || "#D23F3F";
     const grid = css.getPropertyValue("--border-soft").trim() || "#EEF0F3";
     const text = css.getPropertyValue("--faint").trim() || "#8A93A0";

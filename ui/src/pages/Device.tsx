@@ -48,10 +48,6 @@ export default function DevicePage() {
   const s = d.status;
   const h = history.data;
   const rangeTitle = RANGES.find((r) => r.key === range)!.title;
-  const by =
-    d.source === "web"
-      ? `Pinged from the website every ${fmtDuration(d.interval_s)}`
-      : `Pinged by ${d.agent_name ?? "a proxy"} every ${fmtDuration(d.interval_s)}`;
   const method =
     d.source === "web"
       ? s.last_method === "tcp"
@@ -65,72 +61,56 @@ export default function DevicePage() {
 
   return (
     <>
-      <nav aria-label="Breadcrumb" className="small muted">
+      <nav aria-label="Breadcrumb" className="small muted crumbs">
         <Link to="/">Overview</Link> › {d.group_name ?? "Ungrouped"} ›{" "}
         <span style={{ color: "var(--text)" }}>{d.name}</span>
       </nav>
 
-      <section className="row between" style={{ alignItems: "flex-start" }}>
-        <div className="col" style={{ gap: 6 }}>
-          <h1 className="row" style={{ gap: 12, fontSize: 26 }}>
-            <span
-              className={`dot ${s.state}`}
-              style={{ width: 12, height: 12 }}
-              role="img"
-              aria-label={s.state}
-            />
-            {d.name}
+      <section
+        className={`status ${s.state === "down" ? "danger" : ""}`}
+        aria-label="Current state"
+      >
+        <div className="row between" style={{ alignItems: "flex-start" }}>
+          <h1 className="status-line">
+            <span className={`dot ${s.state}`} />
+            {d.name}{" "}
+            {s.state === "up" ? "is up" : s.state === "down" ? "is down" : "has no recent data"}
             {!d.enabled && <span className="pill">disabled</span>}
           </h1>
-          <div className="row small muted" style={{ gap: "8px 16px" }}>
-            <span className="mono">{d.host}</span>
-            <span>{by}</span>
-            <span className="pill soft">{method}</span>
-            {s.state === "up" && (
-              <span className="ok-ink" style={{ fontWeight: 600 }}>
-                up for {fmtFor(s.since)}
-              </span>
-            )}
-            {s.state === "down" && (
-              <span className="danger-ink" style={{ fontWeight: 600 }}>
-                down for {fmtFor(s.since)}
-              </span>
-            )}
-            {s.state === "unknown" && <span>no recent data</span>}
-          </div>
-          {d.notes && (
-            <p className="muted" style={{ margin: "4px 0 0", maxWidth: 720 }}>
-              {d.notes}
-            </p>
+          {me?.user.role === "admin" && (
+            <Link to={`/devices?edit=${d.id}`} className="btn">
+              Edit device
+            </Link>
           )}
         </div>
-        {me?.user.role === "admin" && (
-          <Link to={`/devices?edit=${d.id}`} className="btn">
-            Edit device
-          </Link>
-        )}
-      </section>
-
-      <section className="stat-grid" aria-label={`Summary, ${rangeTitle}`}>
-        <div className="stat">
-          <div className="label">Uptime · {rangeTitle}</div>
-          <div className="value">{fmtPct(h?.summary.uptime)}</div>
-        </div>
-        <div className="stat">
-          <div className="label">Average RTT</div>
-          <div className="value">
-            {fmtRtt(h?.summary.avg_rtt_ms)}
-            {h?.summary.avg_rtt_ms != null && <span className="unit">ms</span>}
+        <dl className="facts">
+          {s.state !== "unknown" && (
+            <div>
+              <dt>{s.state === "up" ? "Up for" : "Down for"}</dt>
+              <dd className={s.state === "down" ? "danger-ink" : undefined}>{fmtFor(s.since)}</dd>
+            </div>
+          )}
+          <div>
+            <dt>Address</dt>
+            <dd className="mono">{d.host}</dd>
           </div>
-        </div>
-        <div className="stat">
-          <div className="label">Outages</div>
-          <div className="value">{h?.summary.outages ?? "—"}</div>
-        </div>
-        <div className="stat">
-          <div className="label">Longest outage</div>
-          <div className="value">{fmtDuration(h?.summary.longest_outage_s)}</div>
-        </div>
+          <div>
+            <dt>Pinged by</dt>
+            <dd>
+              {d.source === "web" ? "The website" : (d.agent_name ?? "A proxy")}
+              <span className="aside">every {fmtDuration(d.interval_s)}</span>
+            </dd>
+          </div>
+          <div>
+            <dt>Method</dt>
+            <dd>{method}</dd>
+          </div>
+        </dl>
+        {d.notes && (
+          <p className="muted" style={{ margin: 0, maxWidth: 720 }}>
+            {d.notes}
+          </p>
+        )}
       </section>
 
       <section className="card col" aria-label="Last 30 days">
@@ -147,7 +127,7 @@ export default function DevicePage() {
 
       <section className="card col" aria-label="Response time">
         <div className="row between">
-          <h2>Response time</h2>
+          <h2>Response time, {rangeTitle.toLowerCase()}</h2>
           <div className="seg" role="group" aria-label="Range">
             {RANGES.map((r) => (
               <button
@@ -161,6 +141,28 @@ export default function DevicePage() {
             ))}
           </div>
         </div>
+        <dl className="facts" aria-label={`Summary, ${rangeTitle.toLowerCase()}`}>
+          <div>
+            <dt>Uptime</dt>
+            <dd>{fmtPct(h?.summary.uptime)}</dd>
+          </div>
+          <div>
+            <dt>Average response</dt>
+            <dd>
+              {fmtRtt(h?.summary.avg_rtt_ms)}
+              {h?.summary.avg_rtt_ms != null && " ms"}
+            </dd>
+          </div>
+          <div>
+            <dt>Outages</dt>
+            <dd>
+              {h?.summary.outages ?? "—"}
+              {h?.summary.longest_outage_s != null && (
+                <span className="aside">longest {fmtDuration(h.summary.longest_outage_s)}</span>
+              )}
+            </dd>
+          </div>
+        </dl>
         {h ? <RttChart history={h} /> : <div className="muted small">Loading…</div>}
         <div className="legend">
           <span>

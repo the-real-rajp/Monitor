@@ -6,11 +6,11 @@ import { REFRESH_CHOICES, refreshLabel, useRefresh } from "../lib/refresh";
 export function Logo() {
   return (
     <svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true">
-      <rect width="24" height="24" rx="6" fill="#2457D6" />
+      <rect width="24" height="24" rx="6" fill="var(--accent)" />
       <path
         d="M4.5 15.5l4-5.5 3.5 3.5 3-6.5 4.5 8.5"
         fill="none"
-        stroke="#fff"
+        stroke="var(--on-accent)"
         strokeWidth="2.2"
         strokeLinecap="round"
         strokeLinejoin="round"

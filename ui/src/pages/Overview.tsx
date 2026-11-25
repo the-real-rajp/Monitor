@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { api, type Overview as OverviewData, type OverviewDevice } from "../api/client";
@@ -8,6 +9,8 @@ import { refreshLabel, useRefresh } from "../lib/refresh";
 export default function Overview() {
   const { me } = useAuth();
   const { ms, choice, siteDefault } = useRefresh();
+  // The one day whose figure is showing, as "deviceId:index".
+  const [day, setDay] = useState<string | null>(null);
   const refreshS = choice === "default" ? siteDefault : choice;
   const q = useQuery({
     queryKey: ["overview"],
@@ -147,6 +150,8 @@ export default function Overview() {
                   key={d.id}
                   d={d}
                   dates={o.days}
+                  day={day}
+                  setDay={setDay}
                   group={o.groups.find((g) => g.devices.includes(d))?.name}
                 />
               ))}
@@ -167,7 +172,7 @@ export default function Overview() {
                   </span>
                 </h2>
                 {rest.map((d) => (
-                  <Row key={d.id} d={d} dates={o.days} />
+                  <Row key={d.id} d={d} dates={o.days} day={day} setDay={setDay} />
                 ))}
               </section>
             );
@@ -234,10 +239,22 @@ function stripSummary(days: (number | null)[]): string {
 }
 
 /** One device: who it is, its last 30 days as a strip, and how it is doing right now. */
-function Row({ d, dates, group }: { d: OverviewDevice; dates: string[]; group?: string }) {
+function Row({
+  d,
+  dates,
+  group,
+  day,
+  setDay,
+}: {
+  d: OverviewDevice;
+  dates: string[];
+  group?: string;
+  day: string | null;
+  setDay: (k: string | null) => void;
+}) {
   return (
-    <Link to={`/devices/${d.id}`} className={`dev ${d.state}`}>
-      <div className="dev-who">
+    <div className={`dev ${d.state}`}>
+      <Link to={`/devices/${d.id}`} className="dev-who dev-link">
         <div className="dev-name">
           <span className={`dot ${d.state}`} role="img" aria-label={d.state} />
           {d.name}
@@ -246,15 +263,24 @@ function Row({ d, dates, group }: { d: OverviewDevice; dates: string[]; group?: 
           {d.host}
           {group && <span className="dev-group">{group}</span>}
         </div>
-      </div>
-      <div className="dev-strip" role="img" aria-label={stripSummary(d.days)}>
-        {d.days.map((p, i) => (
-          <i
-            key={i}
-            className={dayClass(p)}
-            title={`${dates[i] ? fmtDay(dates[i]) : ""}: ${p === null ? "no data" : fmtPct(p)}`}
-          />
-        ))}
+      </Link>
+      <div className="dev-strip" role="group" aria-label={stripSummary(d.days)}>
+        {d.days.map((p, i) => {
+          const key = `${d.id}:${i}`;
+          const tip = `${dates[i] ? fmtDay(dates[i]) : ""}: ${p === null ? "no data" : fmtPct(p)}`;
+          return (
+            <button
+              key={i}
+              type="button"
+              tabIndex={-1}
+              className={`${dayClass(p)} ${i < 6 ? "tip-l" : i > d.days.length - 7 ? "tip-r" : ""}`}
+              aria-label={tip}
+              aria-pressed={day === key}
+              data-tip={tip}
+              onClick={() => setDay(day === key ? null : key)}
+            />
+          );
+        })}
       </div>
       <div className="dev-pct num">{fmtPct(d.uptime_30d)}</div>
       <div className="dev-now num">
@@ -270,6 +296,6 @@ function Row({ d, dates, group }: { d: OverviewDevice; dates: string[]; group?: 
           </>
         )}
       </div>
-    </Link>
+    </div>
   );
 }

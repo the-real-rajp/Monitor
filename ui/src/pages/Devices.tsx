@@ -100,44 +100,38 @@ export default function Devices() {
         {error && <div className="error">{error}</div>}
         <div className="table-card">
           <div className="scroll-x">
-            <table style={{ minWidth: 760 }}>
+            <table className="dense" style={{ minWidth: 600 }}>
               <thead>
                 <tr>
-                  <th>Name</th>
-                  <th>Host</th>
+                  <th>Device</th>
                   <th>Group</th>
                   <th>Pinged by</th>
-                  <th>Every</th>
-                  <th>State</th>
                   <th />
                 </tr>
               </thead>
               <tbody>
                 {list.map((d) => (
                   <tr key={d.id} style={{ opacity: d.enabled ? 1 : 0.6 }}>
-                    <td style={{ fontWeight: 600 }}>
-                      <Link to={`/devices/${d.id}`} style={{ color: "inherit" }}>
-                        {d.name}
-                      </Link>
-                      {!d.enabled && (
-                        <span className="pill" style={{ marginLeft: 8 }}>
-                          disabled
-                        </span>
-                      )}
+                    <td>
+                      <div className="dev-name">
+                        <span
+                          className={`dot ${d.status.state}`}
+                          role="img"
+                          aria-label={d.status.state}
+                        />
+                        <Link to={`/devices/${d.id}`} style={{ color: "inherit" }}>
+                          {d.name}
+                        </Link>
+                        {!d.enabled && <span className="pill">disabled</span>}
+                      </div>
+                      <div className="dev-host">{d.host}</div>
                     </td>
-                    <td className="mono small">{d.host}</td>
                     <td className="muted">{d.group_name ?? "—"}</td>
                     <td className="muted">
                       {d.source === "web"
-                        ? `Website${d.tcp_fallback_port ? ` · TCP ${d.tcp_fallback_port}` : ""}`
+                        ? `The website${d.tcp_fallback_port ? `, TCP ${d.tcp_fallback_port}` : ""}`
                         : (d.agent_name ?? "unassigned")}
-                    </td>
-                    <td className="mono small">{fmtDuration(d.interval_s)}</td>
-                    <td>
-                      <span className="row" style={{ gap: 6, fontSize: 12, fontWeight: 600 }}>
-                        <span className={`dot ${d.status.state}`} />
-                        {d.status.state}
-                      </span>
+                      , every {fmtDuration(d.interval_s)}
                     </td>
                     <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
                       <button className="btn sm" onClick={() => setEditing(d)}>
@@ -157,7 +151,7 @@ export default function Devices() {
                 ))}
                 {devices.data && list.length === 0 && (
                   <tr>
-                    <td colSpan={7} className="empty">
+                    <td colSpan={4} className="empty">
                       {filter ? "No devices match." : "No devices yet. Add one on the right."}
                     </td>
                   </tr>
