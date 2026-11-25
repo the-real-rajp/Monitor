@@ -218,111 +218,102 @@ export default function Agents() {
         </div>
       )}
 
-      <section
-        className="tiles"
-        style={{ gridTemplateColumns: "repeat(auto-fill, minmax(min(380px, 100%), 1fr))" }}
-      >
-        {active.map((a) => (
-          <article key={a.id} className="card col" style={{ gap: 14 }}>
-            <div className="row between" style={{ alignItems: "flex-start" }}>
-              <div>
-                <h2 style={{ fontSize: 16 }}>{a.name}</h2>
-                <div className="small muted mono" style={{ marginTop: 2 }}>
-                  key mon_{a.key_prefix}_…
-                </div>
-              </div>
-              {a.online ? (
-                <span className="pill ok">
-                  <span className="dot up" style={{ width: 8, height: 8 }} /> online
-                </span>
-              ) : a.last_seen_at ? (
-                <span className="pill danger">
-                  <span className="dot down" style={{ width: 8, height: 8 }} /> offline
-                </span>
-              ) : (
-                <span className="pill">
-                  <span className="dot unknown" style={{ width: 8, height: 8 }} /> never connected
-                </span>
-              )}
-            </div>
-            <dl
-              style={{
-                margin: 0,
-                display: "grid",
-                gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-                gap: "10px 16px",
-                fontSize: 13,
-              }}
-            >
-              <div>
-                <dt className="muted">Last heartbeat</dt>
-                <dd style={{ margin: 0, fontWeight: 600 }}>{fmtAgo(a.last_seen_at)}</dd>
-              </div>
-              <div>
-                <dt className="muted">Devices assigned</dt>
-                <dd style={{ margin: 0, fontWeight: 600 }}>
-                  <Link to="/devices">{a.device_count}</Link>
-                </dd>
-              </div>
-              <div>
-                <dt className="muted">Version</dt>
-                <dd style={{ margin: 0, fontWeight: 600 }} className="mono">
-                  {a.version || "—"}
-                </dd>
-              </div>
-              <div>
-                <dt className="muted">Reporting from</dt>
-                <dd style={{ margin: 0, fontWeight: 600 }} className="mono">
-                  {a.last_ip || "—"}
-                </dd>
-              </div>
-              <div>
-                <dt className="muted">Queued results</dt>
-                <dd style={{ margin: 0, fontWeight: 600 }}>{a.queue_depth}</dd>
-              </div>
-              <div>
-                <dt className="muted">Registered</dt>
-                <dd style={{ margin: 0, fontWeight: 600 }}>{fmtDateTime(a.created_at)}</dd>
-              </div>
-            </dl>
-            <div className="row" style={{ gap: 8 }}>
-              <button
-                className="btn sm"
-                onClick={() => {
-                  const n = prompt("Rename proxy", a.name);
-                  if (n && n !== a.name) rename.mutate({ id: a.id, name: n });
-                }}
-              >
-                Rename
-              </button>
-              <button
-                className="btn sm"
-                onClick={() => {
-                  if (
-                    confirm(
-                      `Rotate the key for "${a.name}"? The old key stops working immediately; you must re-run the install command on the Pi.`,
-                    )
-                  )
-                    rotate.mutate(a.id);
-                }}
-              >
-                Rotate key
-              </button>
-              <button
-                className="btn sm danger"
-                onClick={() => {
-                  if (
-                    confirm(`Revoke "${a.name}"? Its devices are disabled but keep their history.`)
-                  )
-                    revoke.mutate(a.id);
-                }}
-              >
-                Revoke
-              </button>
-            </div>
-          </article>
-        ))}
-      </section>
+      {active.length > 0 && (
+        <section className="table-card" aria-label="Proxies">
+          <div className="scroll-x">
+            <table className="dense stack-sm">
+              <thead>
+                <tr>
+                  <th>Proxy</th>
+                  <th>Status</th>
+                  <th>Devices</th>
+                  <th>Version</th>
+                  <th>Reporting from</th>
+                  <th />
+                </tr>
+              </thead>
+              <tbody>
+                {active.map((a) => {
+                  const state = a.online ? "up" : a.last_seen_at ? "down" : "unknown";
+                  return (
+                    <tr key={a.id}>
+                      <td>
+                        <div className="dev-name">
+                          <span className={`dot ${state}`} />
+                          {a.name}
+                        </div>
+                        <div className="dev-host">
+                          key mon_{a.key_prefix}_…, added {fmtDateTime(a.created_at)}
+                        </div>
+                      </td>
+                      <td>
+                        {a.online ? (
+                          <>Online, heard from {fmtAgo(a.last_seen_at)}</>
+                        ) : a.last_seen_at ? (
+                          <span className="danger-ink" style={{ fontWeight: 600 }}>
+                            Offline, last heard from {fmtAgo(a.last_seen_at)}
+                          </span>
+                        ) : (
+                          <span className="muted">Never connected</span>
+                        )}
+                        {a.queue_depth > 0 && (
+                          <div className="small muted">{a.queue_depth} results waiting to send</div>
+                        )}
+                      </td>
+                      <td className="num" data-label="Devices" style={{ textAlign: "left" }}>
+                        <Link to="/devices">{a.device_count}</Link>
+                      </td>
+                      <td className="mono small" data-label="Version">
+                        {a.version || "—"}
+                      </td>
+                      <td className="mono small" data-label="Reporting from">
+                        {a.last_ip || "—"}
+                      </td>
+                      <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
+                        <button
+                          className="btn sm"
+                          onClick={() => {
+                            const n = prompt("Rename proxy", a.name);
+                            if (n && n !== a.name) rename.mutate({ id: a.id, name: n });
+                          }}
+                        >
+                          Rename
+                        </button>
+                        <button
+                          className="btn sm"
+                          onClick={() => {
+                            if (
+                              confirm(
+                                `Rotate the key for "${a.name}"? The old key stops working immediately; you must re-run the install command on the Pi.`,
+                              )
+                            )
+                              rotate.mutate(a.id);
+                          }}
+                        >
+                          Rotate key
+                        </button>
+                        <button
+                          className="btn sm danger"
+                          onClick={() => {
+                            if (
+                              confirm(
+                                `Revoke "${a.name}"? Its devices are disabled but keep their history.`,
+                              )
+                            )
+                              revoke.mutate(a.id);
+                          }}
+                        >
+                          Revoke
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      )}
 
       <section className="card col" style={{ maxWidth: 900 }}>
         <h2>Install on a Raspberry Pi or Linux box</h2>
