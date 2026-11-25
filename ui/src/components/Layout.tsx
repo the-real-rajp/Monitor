@@ -1,6 +1,7 @@
 import { Link, NavLink, Outlet, useNavigate } from "react-router-dom";
 import { useIsFetching, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "../lib/auth";
+import CronBanner from "./CronBanner";
 import { REFRESH_CHOICES, refreshLabel, useRefresh } from "../lib/refresh";
 
 export function Logo() {
@@ -104,6 +105,7 @@ export default function Layout() {
         </div>
       </header>
       <main className="page">
+        <CronBanner />
         <Outlet />
       </main>
     </>

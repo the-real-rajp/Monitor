@@ -114,6 +114,42 @@ In **Cron Jobs**, add a job that runs every five minutes:
 After a deploy, **Settings › About this install** shows the build: the first
 12 characters of the commit on `main` it was built from.
 
+## Backups
+
+`bin/backup.php` writes a gzipped dump of the database to
+`storage/backups/monitor-YYYYMMDD-HHMMSS.sql.gz` (UTC) and keeps the newest
+14. `storage/` sits outside the document root and survives deploys.
+
+In **Cron Jobs**, add a job that runs once a night:
+
+```
+15 3 * * * /usr/local/bin/php /home/cpuser/monitor/bin/backup.php >> /home/cpuser/monitor/storage/backup.log 2>&1
+```
+
+Run it once by hand first. It prints the file it wrote, or `FAILED:` and the
+reason. If it cannot find `mysqldump`, set its full path under `backup` in
+`config.php` (`which mysqldump` in the cPanel **Terminal** prints it). The
+same block changes the directory and how many backups are kept.
+
+These backups live on the same server as the database, so they cover a bad
+migration or a mistaken delete, not the loss of the hosting account. Download
+a copy now and then, or let cPanel's own backup include the home directory.
+
+### Restoring
+
+Restoring replaces every table in the database with the backup's copy. Stop
+the per-minute cron job first so nothing writes while it loads, then:
+
+```sh
+cd /home/cpuser/monitor
+ls -lt storage/backups | head                 # pick a file
+gunzip -c storage/backups/monitor-20261125-031500.sql.gz | mysql -u cpuser_monitor -p cpuser_monitor
+```
+
+The database user, password and name are the ones in `config.php`. Turn the
+cron job back on afterwards. Anything recorded after the backup was taken is
+gone.
+
 ## Troubleshooting
 
 | Symptom | Check |

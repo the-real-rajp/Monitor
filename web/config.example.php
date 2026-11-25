@@ -30,4 +30,13 @@ return [
 
     // Path for the cron lock file. Must be writable by the cron user.
     'lock_file' => __DIR__ . '/storage/cron.lock',
+
+    // Nightly backup (bin/backup.php). The directory must stay outside the
+    // document root. 'keep' is how many backups to retain. Set 'mysqldump' to
+    // a full path if cron cannot find it.
+    'backup' => [
+        'dir'       => __DIR__ . '/storage/backups',
+        'keep'      => 14,
+        'mysqldump' => 'mysqldump',
+    ],
 ];

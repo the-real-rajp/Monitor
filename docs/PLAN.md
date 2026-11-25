@@ -402,4 +402,8 @@ disk, memory and service state with alerts.
 - **Phase 2 (go live) is next:** the first install on the Bluehost account
   (needs the database credentials and the cPanel steps in `docs/DEPLOY.md`),
   and a tagged release so `install.sh` has binaries to download.
+- **Phase 2, 2026-11-25: backup and self-monitoring built.** `bin/backup.php`
+  with retention and a documented restore, and a dashboard banner when the
+  per-minute job has stopped or never ran. Still to do: the first install,
+  the tagged release, the first proxy, and the external dead-man's switch.
 - **Phases 3 to 8** have not started.
