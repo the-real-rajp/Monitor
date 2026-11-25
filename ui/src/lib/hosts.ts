@@ -54,10 +54,10 @@ export function parseBulk(text: string, taken: Map<string, string>): BulkLine[] 
     const cut = t.search(/[\t,]/);
     let name = cut === -1 ? "" : t.slice(0, cut).trim();
     let host = cut === -1 ? t : t.slice(cut + 1).trim();
-    // Only an IP address in the name position means the columns are swapped; a
-    // plain word there is a name, even though it would also pass as a hostname.
-    const nameIsIp = /^[\d.]+$/.test(name) || name.includes(":");
-    if (nameIsIp && hostProblem(name) === null && hostProblem(host) !== null) {
+    // An IP address in the name position, next to something that is not one,
+    // means the columns are the other way round.
+    const isIp = (v: string) => (/^[\d.]+$/.test(v) || v.includes(":")) && hostProblem(v) === null;
+    if (isIp(name) && !isIp(host)) {
       [name, host] = [host, name];
     }
     if (name === "") name = host;
