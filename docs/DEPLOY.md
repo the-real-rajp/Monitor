@@ -82,10 +82,37 @@ Ubuntu cloud image.
 
 ## Updating
 
-Push to `main`. Within a few minutes the deploy branch updates. In cPanel's
-Git Version Control, **Update from Remote** then **Deploy HEAD Commit**, or
-enable automatic deployment on the repository. Migrations run as part of the
+Push to `main`. Within a minute or so the `deploy` workflow publishes a new
+commit on the `deploy` branch. That is as far as GitHub goes: nothing reaches
+the host until cPanel pulls that branch. Migrations run as part of each
 deploy.
+
+### By hand
+
+In cPanel's Git Version Control, **Manage › Pull or Deploy**: **Update from
+Remote**, then **Deploy HEAD Commit**.
+
+### Automatically
+
+cPanel only deploys by itself when commits are pushed *to* a repository it
+hosts. This one is a clone that pulls from GitHub, so there is no setting to
+switch on. A second cron job gets the same result: it pulls the deploy branch
+and deploys only when something changed.
+
+In **Cron Jobs**, add a job that runs every five minutes:
+
+```
+*/5 * * * * cd /home/cpuser/repos/monitor && old=$(git rev-parse HEAD) && git pull -q --ff-only && [ "$old" != "$(git rev-parse HEAD)" ] && /usr/bin/uapi VersionControlDeployment create repository_root=/home/cpuser/repos/monitor
+```
+
+- Use the repository path from step 3, as Git Version Control shows it.
+- `uapi` is at `/usr/local/cpanel/bin/uapi` on some hosts; `which uapi` in the
+  cPanel **Terminal** prints the path.
+- Run the command once by hand in the Terminal first. It prints nothing when
+  there is nothing new.
+
+After a deploy, **Settings › About this install** shows the build, which
+matches the short commit hash on `main`.
 
 ## Troubleshooting
 
