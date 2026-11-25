@@ -116,55 +116,84 @@ async function resolveGroup(c: Checks, groups: Group[]): Promise<number | null> 
   return (await api.post<Group>("/api/groups", { name })).id;
 }
 
+/** The groups that exist, shown as choices, then "No group" and a way to name a new one. */
+function GroupPicker({
+  c,
+  setC,
+  groups,
+}: {
+  c: Checks;
+  setC: (next: Checks) => void;
+  groups: Group[];
+}) {
+  return (
+    <fieldset className="plain col">
+      <legend className="field">Group</legend>
+      <div className="chips">
+        {groups.map((g) => (
+          <button
+            key={g.id}
+            type="button"
+            className="chip"
+            aria-pressed={c.group === g.id}
+            onClick={() => setC({ ...c, group: g.id })}
+          >
+            {g.name}
+          </button>
+        ))}
+        <button
+          type="button"
+          className="chip quiet"
+          aria-pressed={c.group === null}
+          onClick={() => setC({ ...c, group: null })}
+        >
+          No group
+        </button>
+        <button
+          type="button"
+          className="chip quiet"
+          aria-pressed={c.group === "new"}
+          onClick={() => setC({ ...c, group: "new" })}
+        >
+          New group…
+        </button>
+      </div>
+      {c.group === "new" && (
+        <label className="field">
+          New group name
+          <input
+            id="device-new-group"
+            type="text"
+            value={c.newGroup}
+            onChange={(e) => setC({ ...c, newGroup: e.target.value })}
+            required
+            maxLength={100}
+            autoFocus
+          />
+        </label>
+      )}
+    </fieldset>
+  );
+}
+
 function ChecksFields({
   c,
   setC,
   agents,
   groups,
+  groupPicker = true,
 }: {
   c: Checks;
   setC: (next: Checks) => void;
   agents: Agent[];
   groups: Group[];
+  /** False where each device picks its own group, as in the bulk form. */
+  groupPicker?: boolean;
 }) {
   const intervals = INTERVALS.filter((i) => c.source === "agent" || i >= 60);
   return (
     <>
-      <div className="field-pair">
-        <label className="field">
-          Group
-          <select
-            id="device-group"
-            value={c.group ?? ""}
-            onChange={(e) => {
-              const v = e.target.value;
-              setC({ ...c, group: v === "new" ? "new" : v === "" ? null : Number(v) });
-            }}
-          >
-            <option value="">Ungrouped</option>
-            {groups.map((g) => (
-              <option key={g.id} value={g.id}>
-                {g.name}
-              </option>
-            ))}
-            <option value="new">New group…</option>
-          </select>
-        </label>
-        {c.group === "new" && (
-          <label className="field">
-            New group name
-            <input
-              id="device-new-group"
-              type="text"
-              value={c.newGroup}
-              onChange={(e) => setC({ ...c, newGroup: e.target.value })}
-              required
-              maxLength={100}
-              autoFocus
-            />
-          </label>
-        )}
-      </div>
+      {groupPicker && <GroupPicker c={c} setC={setC} groups={groups} />}
 
       <fieldset className="plain col">
         <legend className="field">Pinged by</legend>
@@ -459,6 +488,31 @@ function SingleForm({
   );
 }
 
+interface Row {
+  key: number;
+  name: string;
+  host: string;
+  /** A group id, null for no group, or "new" while typing a new group's name. */
+  group: number | null | "new";
+  newGroup: string;
+  /** True once the address box has been left, so typing is not interrupted by errors. */
+  touched: boolean;
+  /** What the server said when this row was tried, if it failed. */
+  failed: string | null;
+}
+
+let rowKey = 0;
+const emptyRow = (group: Row["group"] = null, newGroup = ""): Row => ({
+  key: ++rowKey,
+  name: "",
+  host: "",
+  group,
+  newGroup,
+  touched: false,
+  failed: null,
+});
+const isBlank = (r: Row) => r.name.trim() === "" && r.host.trim() === "";
+
 function BulkForm({
   agents,
   groups,
@@ -471,47 +525,107 @@ function BulkForm({
   onClose: () => void;
 }) {
   const afterSave = useAfterSave();
-  const [text, setText] = useState("");
+  const [rows, setRows] = useState<Row[]>(() => [emptyRow(), emptyRow(), emptyRow(), emptyRow()]);
   const [c, setC] = useState<Checks>(defaultChecks(agents));
-  const [result, setResult] = useState<{ added: number; failed: string[] } | null>(null);
+  const [added, setAdded] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const taken = useMemo(
-    () => new Map(devices.map((d) => [d.host.toLowerCase(), d.name])),
-    [devices],
-  );
-  const lines = useMemo(() => parseBulk(text, taken), [text, taken]);
-  const good = lines.filter((l) => l.problem === null);
-  const bad = lines.filter((l) => l.problem !== null);
+  const patch = (key: number, change: Partial<Row>) =>
+    setRows((cur) => cur.map((r) => (r.key === key ? { ...r, failed: null, ...change } : r)));
+
+  // What is wrong with each filled-in row, by key. Blank rows are ignored.
+  const problems = useMemo(() => {
+    const taken = new Map(devices.map((d) => [d.host.toLowerCase(), d.name]));
+    const seen = new Set<string>();
+    const out = new Map<number, string>();
+    for (const r of rows) {
+      if (isBlank(r)) continue;
+      const host = r.host.trim();
+      const key = host.toLowerCase();
+      let problem = hostProblem(host);
+      if (!problem && r.name.trim().length > 100)
+        problem = "The name is longer than 100 characters.";
+      if (!problem && taken.has(key)) problem = `Already monitored as “${taken.get(key)}”.`;
+      if (!problem && seen.has(key)) problem = "This address is on an earlier row too.";
+      if (!problem && r.group === "new" && r.newGroup.trim() === "") {
+        problem = "Name the new group, or pick an existing one.";
+      }
+      if (!problem) seen.add(key);
+      if (problem) out.set(r.key, problem);
+    }
+    return out;
+  }, [rows, devices]);
+
+  const filled = rows.filter((r) => !isBlank(r));
+  const good = filled.filter((r) => !problems.has(r.key));
+
+  /** Rows pasted from a spreadsheet or a text list fill this row and the ones after it. */
+  function paste(at: number, text: string): boolean {
+    if (!/[\t\n]/.test(text.trim())) return false;
+    const parsed = parseBulk(text, new Map());
+    if (parsed.length === 0) return false;
+    setRows((cur) => {
+      const here = cur[at]!;
+      const fresh = parsed.map((l) => ({
+        ...emptyRow(here.group, here.newGroup),
+        name: l.name === l.host ? "" : l.name,
+        host: l.host,
+        touched: true,
+      }));
+      const before = cur.slice(0, at);
+      const after = cur.slice(isBlank(here) ? at + 1 : at).filter((r) => !isBlank(r));
+      return [...before, ...fresh, ...after, emptyRow(here.group, here.newGroup)];
+    });
+    return true;
+  }
 
   const save = useMutation({
     mutationFn: async () => {
-      const groupId = await resolveGroup(c, groups);
-      if (c.group === "new") setC({ ...c, group: groupId, newGroup: "" });
-      const failed: { text: string; why: string }[] = [];
-      let added = 0;
-      // One at a time, so the devices keep the order they were pasted in.
-      for (const l of good) {
+      // Create each new group once, however many rows name it.
+      const ids = new Map(groups.map((g) => [g.name.trim().toLowerCase(), g.id]));
+      const failures = new Map<number, string>();
+      const done: number[] = [];
+      // One at a time, so the devices keep the order they are listed in.
+      for (const r of good) {
         try {
+          let groupId: number | null;
+          if (r.group === "new") {
+            const name = r.newGroup.trim();
+            if (!ids.has(name.toLowerCase())) {
+              ids.set(name.toLowerCase(), (await api.post<Group>("/api/groups", { name })).id);
+            }
+            groupId = ids.get(name.toLowerCase())!;
+          } else {
+            groupId = r.group;
+          }
           await api.post("/api/devices", {
-            name: l.name,
-            host: l.host,
+            name: r.name.trim() || r.host.trim(),
+            host: r.host.trim(),
             notes: null,
             enabled: true,
             ...checksBody(c, groupId),
           });
-          added++;
+          done.push(r.key);
         } catch (e) {
-          failed.push({ text: l.text, why: `${l.host}: ${errorMessage(e)}` });
+          failures.set(r.key, errorMessage(e));
         }
       }
-      return { added, failed };
+      return { done, failures, ids };
     },
-    onSuccess: ({ added, failed }) => {
+    onSuccess: ({ done, failures, ids }) => {
       setError(null);
-      setResult({ added, failed: failed.map((f) => f.why) });
-      // Leave only the lines that still need attention.
-      setText([...bad.map((l) => l.text), ...failed.map((f) => f.text)].join("\n"));
+      setAdded(done.length);
+      setRows((cur) => {
+        const left = cur
+          .filter((r) => !done.includes(r.key) && !isBlank(r))
+          .map((r) => {
+            // A group created just now is an ordinary group from here on.
+            const id = r.group === "new" ? ids.get(r.newGroup.trim().toLowerCase()) : undefined;
+            const next = id === undefined ? r : { ...r, group: id, newGroup: "" };
+            return { ...next, failed: failures.get(r.key) ?? null };
+          });
+        return left.length > 0 ? left : [emptyRow(), emptyRow(), emptyRow(), emptyRow()];
+      });
       afterSave();
     },
     onError: (e) => {
@@ -522,72 +636,127 @@ function BulkForm({
 
   function submit(e: FormEvent) {
     e.preventDefault();
+    setRows((cur) => cur.map((r) => (isBlank(r) ? r : { ...r, touched: true })));
     if (good.length === 0) return;
-    setResult(null);
+    setAdded(null);
     save.mutate();
   }
+
+  const stuck = rows.filter((r) => r.failed !== null).length;
+  const last = rows[rows.length - 1];
 
   return (
     <form className="sheet-form" onSubmit={submit}>
       <div className="sheet-body stack">
-        {result && (
-          <div className={`banner ${result.failed.length ? "warn" : "ok"}`} role="status">
-            <div>
-              Added {result.added} device{result.added === 1 ? "" : "s"}.
-              {result.failed.length > 0 && (
-                <>
-                  {" "}
-                  {result.failed.length} could not be added and{" "}
-                  {result.failed.length === 1 ? "is" : "are"} still in the box:
-                  <ul className="problems">
-                    {result.failed.map((f) => (
-                      <li key={f}>{f}</li>
-                    ))}
-                  </ul>
-                </>
-              )}
-            </div>
+        {added !== null && (
+          <div className={`banner ${stuck ? "warn" : "ok"}`} role="status">
+            Added {added} device{added === 1 ? "" : "s"}.
+            {stuck > 0 &&
+              ` ${stuck} could not be added and ${stuck === 1 ? "is" : "are"} still listed below.`}
           </div>
         )}
-        <label className="field">
-          One device per line, as: name, address
-          <textarea
-            id="device-bulk"
-            className="mono"
-            rows={8}
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            placeholder={"Core switch, 10.0.0.2\nFirewall, 10.0.0.1\nprinter-2.office.example.com"}
-            aria-describedby="device-bulk-note"
-            spellCheck={false}
-            autoCapitalize="none"
-            autoFocus
-          />
-        </label>
-        <div id="device-bulk-note" className="field-note" aria-live="polite">
-          {lines.length === 0 ? (
-            "A comma or a tab between name and address both work, so rows pasted from a spreadsheet are fine. A line with only an address uses it as the name."
-          ) : (
-            <>
-              {good.length} ready to add
-              {bad.length > 0 && `, ${bad.length} need${bad.length === 1 ? "s" : ""} fixing:`}
-              {bad.length > 0 && (
-                <ul className="problems">
-                  {bad.map((l) => (
-                    <li key={l.line}>
-                      Line {l.line}: {l.problem}
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </>
-          )}
+        <div className="rows" role="group" aria-label="Devices to add">
+          <div className="rows-head" aria-hidden="true">
+            <span>Name</span>
+            <span>Hostname or IP address</span>
+            <span>Group</span>
+            <span />
+          </div>
+          {rows.map((r, i) => {
+            const problem = r.failed ?? (r.touched ? problems.get(r.key) : undefined);
+            return (
+              <div key={r.key} className="row-edit">
+                <input
+                  type="text"
+                  aria-label={`Name, row ${i + 1}`}
+                  value={r.name}
+                  placeholder={r.host.trim() || "Name"}
+                  maxLength={100}
+                  onChange={(e) => patch(r.key, { name: e.target.value })}
+                  onPaste={(e) => {
+                    if (paste(i, e.clipboardData.getData("text"))) e.preventDefault();
+                  }}
+                  autoFocus={i === 0}
+                />
+                <input
+                  type="text"
+                  className="mono"
+                  aria-label={`Hostname or IP address, row ${i + 1}`}
+                  aria-invalid={problem !== undefined}
+                  value={r.host}
+                  placeholder="10.0.0.2"
+                  autoCapitalize="none"
+                  spellCheck={false}
+                  onChange={(e) => patch(r.key, { host: e.target.value })}
+                  onBlur={() => patch(r.key, { touched: r.host !== "", failed: r.failed })}
+                  onPaste={(e) => {
+                    if (paste(i, e.clipboardData.getData("text"))) e.preventDefault();
+                  }}
+                />
+                {r.group === "new" ? (
+                  <input
+                    type="text"
+                    aria-label={`New group name, row ${i + 1}`}
+                    value={r.newGroup}
+                    placeholder="New group name"
+                    maxLength={100}
+                    onChange={(e) => patch(r.key, { newGroup: e.target.value })}
+                    autoFocus
+                  />
+                ) : (
+                  <select
+                    aria-label={`Group, row ${i + 1}`}
+                    value={r.group ?? ""}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      patch(r.key, { group: v === "new" ? "new" : v === "" ? null : Number(v) });
+                    }}
+                  >
+                    {groups.map((g) => (
+                      <option key={g.id} value={g.id}>
+                        {g.name}
+                      </option>
+                    ))}
+                    <option value="">No group</option>
+                    <option value="new">New group…</option>
+                  </select>
+                )}
+                <button
+                  type="button"
+                  className="btn sm row-remove"
+                  aria-label={`Remove row ${i + 1}`}
+                  title="Remove this row"
+                  onClick={() =>
+                    setRows((cur) =>
+                      cur.length > 1 ? cur.filter((x) => x.key !== r.key) : [emptyRow()],
+                    )
+                  }
+                >
+                  ×
+                </button>
+                {problem && <div className="row-problem error">{problem}</div>}
+              </div>
+            );
+          })}
+        </div>
+        <div className="row between">
+          <button
+            type="button"
+            className="btn sm"
+            onClick={() =>
+              setRows((cur) => [...cur, emptyRow(last?.group ?? null, last?.newGroup ?? "")])
+            }
+          >
+            Add a row
+          </button>
+          <span className="field-note" style={{ margin: 0 }}>
+            Rows copied from a spreadsheet can be pasted into any name or address box.
+          </span>
         </div>
 
-        <ChecksFields c={c} setC={setC} agents={agents} groups={groups} />
+        <ChecksFields c={c} setC={setC} agents={agents} groups={groups} groupPicker={false} />
         <p className="field-note">
-          These settings apply to every device in the list. Change any one of them afterwards with
-          Edit.
+          How they are checked applies to every device listed. Change any one afterwards with Edit.
         </p>
         {error && (
           <div className="error" role="alert">
@@ -602,7 +771,7 @@ function BulkForm({
         <button
           className="btn primary"
           type="submit"
-          disabled={save.isPending || good.length === 0}
+          disabled={save.isPending || filled.length === 0}
         >
           {save.isPending
             ? "Adding…"
