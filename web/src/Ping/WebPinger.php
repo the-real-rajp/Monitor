@@ -147,6 +147,11 @@ final class WebPinger
         if (filter_var($host, FILTER_VALIDATE_IP)) {
             return true;
         }
+        // Digits and dots that are not an IP address are a typo ("10.0.0.300",
+        // "10.0.0"), not a hostname: no real name ends in a number.
+        if (preg_match('/^[\d.]+$/', $host)) {
+            return false;
+        }
         return (bool) preg_match('/^(?=.{1,253}$)([a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)*[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/i', $host);
     }
 }

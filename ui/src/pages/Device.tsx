@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link, useParams } from "react-router-dom";
 import { api, type Day, type Device, type History, type Outage, type Range } from "../api/client";
+import DeviceDialog from "../components/DeviceDialog";
 import RttChart from "../components/RttChart";
 import UptimeStrip from "../components/UptimeStrip";
 import { fmtDateTime, fmtDuration, fmtFor, fmtPct, fmtRtt } from "../lib/format";
@@ -20,6 +21,7 @@ export default function DevicePage() {
   const { me } = useAuth();
   const { ms, slowMs } = useRefresh();
   const [range, setRange] = useState<Range>("24h");
+  const [editing, setEditing] = useState(false);
 
   const device = useQuery({
     queryKey: ["device", id],
@@ -78,9 +80,9 @@ export default function DevicePage() {
             {!d.enabled && <span className="pill">disabled</span>}
           </h1>
           {me?.user.role === "admin" && (
-            <Link to={`/devices?edit=${d.id}`} className="btn">
+            <button className="btn" onClick={() => setEditing(true)}>
               Edit device
-            </Link>
+            </button>
           )}
         </div>
         <dl className="facts">
@@ -233,6 +235,7 @@ export default function DevicePage() {
           </div>
         )}
       </section>
+      {editing && <DeviceDialog device={d} onClose={() => setEditing(false)} />}
     </>
   );
 }

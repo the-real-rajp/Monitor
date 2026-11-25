@@ -110,6 +110,7 @@ code,
 }
 button,
 input,
+textarea,
 select {
   font: inherit;
   color: inherit;
@@ -809,6 +810,7 @@ input[type="email"],
 input[type="password"],
 input[type="number"],
 input[type="search"],
+textarea,
 select {
   height: 38px;
   border: 1px solid var(--border);
@@ -821,6 +823,7 @@ input:disabled {
   background: var(--bg);
 }
 input:focus,
+textarea:focus,
 select:focus,
 button:focus-visible,
 a:focus-visible {
@@ -866,20 +869,6 @@ pre.code {
   overflow-x: auto;
   white-space: pre-wrap;
   word-break: break-all;
-}
-.two-col {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 24px;
-  align-items: flex-start;
-}
-.two-col > .main {
-  flex: 999 1 560px;
-  min-width: 0;
-}
-.two-col > .side {
-  flex: 1 1 340px;
-  max-width: 440px;
 }
 .empty {
   text-align: center;
@@ -1099,4 +1088,116 @@ pre.code {
 .u-cursor-y.u-off,
 .u-cursor-pt.u-off {
   display: none;
+}
+
+/* add / edit sheet */
+textarea {
+  height: auto;
+  padding: 8px 10px;
+  line-height: 1.45;
+  resize: vertical;
+  width: 100%;
+}
+textarea.mono {
+  font-family: var(--mono);
+  font-size: 13px;
+}
+input[aria-invalid="true"] {
+  border-color: var(--danger);
+}
+dialog.sheet {
+  width: min(600px, calc(100vw - 24px));
+  max-height: calc(100dvh - 24px);
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text);
+  overflow: hidden;
+}
+dialog.sheet[open] {
+  display: flex;
+  flex-direction: column;
+}
+dialog.sheet::backdrop {
+  background: rgb(15 17 21 / 0.55);
+}
+.sheet-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px 16px;
+  padding: 16px 24px;
+  border-bottom: 1px solid var(--border);
+}
+.sheet-form {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.sheet-body {
+  padding: 20px 24px;
+  overflow-y: auto;
+}
+.sheet-body.stack {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.sheet-foot {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 14px 24px;
+  border-top: 1px solid var(--border);
+}
+.field-pair {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 14px 12px;
+}
+.field-note {
+  margin: -8px 0 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+.field-note:empty {
+  display: none;
+}
+fieldset.plain {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  min-width: 0;
+}
+fieldset.plain legend {
+  padding: 0;
+  margin-bottom: 6px;
+}
+.check {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  font-size: 13px;
+}
+.check input {
+  margin-top: 3px;
+}
+.banner.ok {
+  border-color: var(--ok-border);
+  background: var(--ok-soft);
+  color: var(--ok-ink);
+}
+.problems {
+  margin: 6px 0 0;
+  padding-left: 18px;
+}
+@media (max-width: 720px) {
+  .sheet-head,
+  .sheet-body,
+  .sheet-foot {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
 }
