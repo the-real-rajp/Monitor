@@ -111,8 +111,8 @@ In **Cron Jobs**, add a job that runs every five minutes:
 - Run the command once by hand in the Terminal first. It prints nothing when
   there is nothing new.
 
-After a deploy, **Settings › About this install** shows the build, which
-matches the short commit hash on `main`.
+After a deploy, **Settings › About this install** shows the build: the first
+12 characters of the commit on `main` it was built from.
 
 ## Troubleshooting
 
