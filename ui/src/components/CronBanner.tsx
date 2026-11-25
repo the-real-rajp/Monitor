@@ -6,7 +6,8 @@ import { useRefresh } from "../lib/refresh";
 
 /**
  * Warns on every page when the per-minute job has stopped or never ran.
- * Without it nothing on the dashboard updates, and nothing else would say so.
+ * Proxy results still arrive without it, but website checks, rollups and
+ * silence detection stop, and nothing else would say so.
  */
 export default function CronBanner() {
   const { me } = useAuth();
@@ -32,7 +33,8 @@ export default function CronBanner() {
             ? "This site's per-minute job has never run."
             : `This site's per-minute job last ran ${fmtDuration(Number(age![1]))} ago.`}
         </strong>{" "}
-        Until it runs, website checks, uptime history and the states shown here are out of date.{" "}
+        Devices pinged by a proxy still update. Website checks, the 30-day uptime history and
+        spotting devices that have gone silent wait until it runs.{" "}
         {isAdmin
           ? "Check the cron job in cPanel; the deploy guide has the line to add."
           : "Tell whoever runs this site."}
