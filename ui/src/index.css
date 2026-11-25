@@ -88,6 +88,7 @@ a:hover {
 p a:not(.btn),
 li a:not(.btn),
 dd a:not(.btn),
+td.num a,
 .crumbs a {
   text-decoration: underline;
   text-decoration-thickness: 1px;
@@ -361,48 +362,6 @@ main.page {
   font-weight: 400;
   color: var(--muted);
 }
-.stat-grid {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 16px;
-}
-@media (max-width: 900px) {
-  .stat-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
-.stat {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 16px 20px;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-.label {
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--muted);
-}
-.stat .value {
-  font-size: 28px;
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-  letter-spacing: -0.01em;
-  line-height: 1.1;
-}
-.stat .value .unit {
-  font-size: 14px;
-  font-weight: 500;
-  color: var(--muted);
-  margin-left: 4px;
-  letter-spacing: 0;
-}
-.stat .sub {
-  font-size: 13px;
-  color: var(--muted);
-}
 .muted {
   color: var(--muted);
 }
@@ -434,11 +393,6 @@ main.page {
 }
 
 /* device board: one row per device, its last 30 days as a strip */
-.tiles {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-  gap: 14px;
-}
 .board {
   --cols: minmax(180px, 280px) minmax(0, 1fr) 76px 112px;
   background: var(--surface);
@@ -617,6 +571,46 @@ main.page {
 table.dense td {
   padding-top: 8px;
   padding-bottom: 8px;
+}
+/* A table whose rows become stacked blocks on a phone, each cell naming itself. */
+@media (min-width: 721px) {
+  table.stack-sm {
+    min-width: 820px;
+  }
+}
+@media (max-width: 720px) {
+  table.stack-sm,
+  table.stack-sm tbody,
+  table.stack-sm tr,
+  table.stack-sm td {
+    display: block;
+  }
+  table.stack-sm thead {
+    display: none;
+  }
+  table.stack-sm tr {
+    padding: 12px 0;
+    border-bottom: 1px solid var(--border-soft);
+  }
+  table.stack-sm tr:last-child {
+    border-bottom: 0;
+  }
+  table.stack-sm td {
+    border: 0;
+    padding: 3px 16px;
+    text-align: left !important;
+    white-space: normal !important;
+  }
+  table.stack-sm td[data-label]::before {
+    content: attr(data-label) " ";
+    font-family: "IBM Plex Sans", system-ui, sans-serif;
+    font-size: 13px;
+    color: var(--muted);
+    margin-right: 6px;
+  }
+  table.stack-sm td:last-child {
+    padding-top: 8px;
+  }
 }
 .dev.unknown .dev-strip {
   opacity: 0.6;

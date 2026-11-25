@@ -6,6 +6,7 @@
 # Node
 node_modules/
 ui/dist/
+*.tsbuildinfo
 
 # PHP
 web/vendor/
