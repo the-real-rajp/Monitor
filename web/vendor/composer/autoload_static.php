@@ -28,6 +28,7 @@ class ComposerStaticInit563a7e00f47c5bf517273e230780d665
         'Monitor\\Auth\\LoginThrottle' => __DIR__ . '/../..' . '/src/Auth/LoginThrottle.php',
         'Monitor\\Auth\\Principal' => __DIR__ . '/../..' . '/src/Auth/Principal.php',
         'Monitor\\Auth\\Sessions' => __DIR__ . '/../..' . '/src/Auth/Sessions.php',
+        'Monitor\\Backup' => __DIR__ . '/../..' . '/src/Backup.php',
         'Monitor\\Clock' => __DIR__ . '/../..' . '/src/Clock.php',
         'Monitor\\Db' => __DIR__ . '/../..' . '/src/Db.php',
         'Monitor\\Handlers\\AgentApiHandlers' => __DIR__ . '/../..' . '/src/Handlers/AgentApiHandlers.php',

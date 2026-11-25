@@ -3,7 +3,7 @@
         'name' => 'monitor/web',
         'pretty_version' => 'dev-main',
         'version' => 'dev-main',
-        'reference' => 'c6d3870ec0ea1b84c7b25b63dfa2e53dc13ee84c',
+        'reference' => 'b7a034bf085d06e1d3ca4352549ebbb7b20c16a4',
         'type' => 'project',
         'install_path' => __DIR__ . '/../../',
         'aliases' => array(),
@@ -13,7 +13,7 @@
         'monitor/web' => array(
             'pretty_version' => 'dev-main',
             'version' => 'dev-main',
-            'reference' => 'c6d3870ec0ea1b84c7b25b63dfa2e53dc13ee84c',
+            'reference' => 'b7a034bf085d06e1d3ca4352549ebbb7b20c16a4',
             'type' => 'project',
             'install_path' => __DIR__ . '/../../',
             'aliases' => array(),

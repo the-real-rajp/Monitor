@@ -13,6 +13,7 @@ return array(
     'Monitor\\Auth\\LoginThrottle' => $baseDir . '/src/Auth/LoginThrottle.php',
     'Monitor\\Auth\\Principal' => $baseDir . '/src/Auth/Principal.php',
     'Monitor\\Auth\\Sessions' => $baseDir . '/src/Auth/Sessions.php',
+    'Monitor\\Backup' => $baseDir . '/src/Backup.php',
     'Monitor\\Clock' => $baseDir . '/src/Clock.php',
     'Monitor\\Db' => $baseDir . '/src/Db.php',
     'Monitor\\Handlers\\AgentApiHandlers' => $baseDir . '/src/Handlers/AgentApiHandlers.php',
